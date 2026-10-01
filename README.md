@@ -1,11 +1,7 @@
 # Cobia larvae in the SEAMAP plankton survey
 
 Distribution and seasonality of cobia (*Rachycentron canadum*) larvae in the northern Gulf of
-Mexico from the SEAMAP ichthyoplankton survey, 1982-2024.
-
-SEAMAP identifies cobia to species, so this runs off the public archive with no specimen loan or
-re-sorting. 549 catch records, 1,501 larvae. Ditty and Shaw (1992), the standard reference for
-cobia early life history in the Gulf, examined 76.
+Mexico from the SEAMAP ichthyoplankton survey, 1982-2024. 549 catch records, 1,501 larvae.
 
 ## Running it
 
@@ -25,9 +21,8 @@ tidyverse, sf, terra, marmap, patchwork, rnaturalearth.
 
 ## Data
 
-https://seamapdata.gsmfc.org/, Plankton Survey Data (CSV). One zip of the whole archive,
-re-released periodically; `01_download_seamap.R` records the release used in
-`data/raw/seamap/SOURCE.txt`.
+https://seamapdata.gsmfc.org/, Plankton Survey Data (CSV). One zip, re-released periodically;
+`01_download_seamap.R` records the release used in `data/raw/seamap/SOURCE.txt`.
 
 | table | one row per | fields used |
 |---|---|---|
@@ -59,13 +54,13 @@ lengths to a catch record).
   September. Holds with area, year range and time of day fixed.
 - West Florida shelf ~6x scarcer than Texas-Louisiana within June-July (4.1 vs 25.8 per 100 tows),
   matched for depth, gear and years. Scarcer, not absent.
-- Smallest larvae peak in May, abundance in June. Fits a cohort spawned in or before May.
+- Smallest larvae peak in May, abundance in June.
 - Neuston catch: 12.2 per 100 neuston tows vs 1.0 per 100 bongo.
 
 ## Limitations
 
-- No ages. No age-length relation exists for wild cobia larvae; published growth rates are from
-  hatchery rearing. Size classes are cuts on length, not stages.
+- No ages. No age-length relation for wild cobia larvae; published rates are from hatchery
+  rearing. Size classes are cuts on length, not stages.
 - No interannual trend. Rates rise ~10x from the 1980s to the 2010s, but daytime sampling on the
   early trawl surveys was a known bias corrected around 1995, and across that break the day rate
   rises ~29x while the night rate barely moves.
