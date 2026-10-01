@@ -3,6 +3,29 @@
 Distribution and seasonality of cobia (*Rachycentron canadum*) larvae in the northern Gulf of
 Mexico from the SEAMAP ichthyoplankton survey, 1982-2024. 549 catch records, 1,501 larvae.
 
+## What's already known
+
+Ditty and Shaw (1992) is the standard reference for cobia early life history in the Gulf. They
+examined 70 eggs and 76 larvae of 2.6-25 mm SL, 70 of them under 20 mm taken in the Gulf between
+1967 and 1988, from museum collections and early SEAMAP samples.
+
+- Eggs average 1.24 mm with a single oil globule. Hatching at about 2.5 mm SL; incubation of
+  about 24 h at 29 C, inferred from an egg-diameter and temperature relation rather than observed.
+- Yolk-sac larvae 2.6-3.2 mm. Eye unpigmented until 3.5-4.0 mm.
+- Larvae first appear in late May; 98% were taken June-September.
+- 85% at 25-30 C, most above 27 ppt, 75% at station depths under 100 m (median 50 m).
+- Spawning inferred to occur during the day, from the developmental stage of eggs at collection.
+- Seven larvae over 9.5 mm beyond the 180 m contour, all off the Mississippi delta. Offshore
+  waters were well sampled in May, when adults are ripe, but no larvae were identified there.
+- Collection locations suggested spawning on the shelf 50-90 km from the coast.
+
+On the Atlantic coast, Lefebvre and Denson (2012) documented inshore spawning in two South
+Carolina sounds, with eggs and larvae 10-15 km inside the sound mouths, actively spawning females
+confirmed by histology, and spawning in the afternoon and early evening.
+
+SEDAR 28 (Gulf cobia, 2013, updated 2019) carries no larval index. Ditty and Shaw is its only
+early-life-history document.
+
 ## Running it
 
 ```r
@@ -66,8 +89,11 @@ lengths to a catch record).
   rises ~29x while the night rate barely moves.
 - Two thirds of larvae measured; 11 of the 21 tows holding >10 larvae had under half measured.
 
-## Reference
+## References
 
 Ditty, J.G. and R.F. Shaw. 1992. Larval development, distribution, and ecology of cobia
 *Rachycentron canadum* (Family: Rachycentridae), in the northern Gulf of Mexico.
 *Fishery Bulletin* 90:668-677.
+
+Lefebvre, L.S. and M.R. Denson. 2012. Inshore spawning of cobia (*Rachycentron canadum*) in South
+Carolina. *Fishery Bulletin* 110:397-412.
