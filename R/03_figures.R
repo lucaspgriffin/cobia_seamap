@@ -41,7 +41,9 @@ map_frame <- list(coord_sf(xlim = BOX$lon, ylim = MAP_LAT, expand = FALSE), labs
 pA <- ggplot() +
   geom_raster(data = bathy_df, aes(lon, lat, fill = z), interpolate = TRUE) +
   scale_fill_gradient(low = "#1f3d6b", high = "#dbe9f6", name = "Depth (m)",
-                      labels = function(x) -x, guide = guide_colourbar(order = 3)) +
+                      labels = function(x) -x, breaks = c(0, -3000, -6000),
+                      guide = guide_colourbar(order = 3, barwidth = unit(48, "pt"),
+                                              barheight = unit(6, "pt"))) +
   geom_sf(data = filter(iso, depth_m == 200), colour = "grey20", linewidth = 0.35) +
   geom_sf(data = filter(iso, depth_m > 200), colour = "grey35", linewidth = 0.2, linetype = "dotted") +
   geom_sf(data = land, fill = "grey85", colour = "grey40", linewidth = 0.2) +
