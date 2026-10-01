@@ -14,7 +14,7 @@ dir_seamap  <- file.path(dir_raw, "seamap")
 dir_derived <- "data/derived"
 dir_fig     <- "output/figures"
 dir_log     <- "output/logs"
-for (d in c(dir_seamap, dir_derived, dir_fig, dir_log)) dir.create(d, recursive = TRUE, showWarnings = FALSE)
+for (d in c(dir_seamap, dir_derived, file.path(dir_derived, "panels"), dir_fig, dir_log)) dir.create(d, recursive = TRUE, showWarnings = FALSE)
 
 # Study box: US Gulf, shelf and slope.
 BOX     <- list(lon = c(-98, -80), lat = c(18, 31))
@@ -77,9 +77,47 @@ tag_region <- function(d) {
   d
 }
 
-save_fig <- function(p, name, width, height, dpi = 360) {
+# Basemap pieces, built once and cached: analyses that map share them.
+basemap <- function() {
+  f <- file.path(dir_derived, "basemap.rds")
+  if (file.exists(f)) return(readRDS(f))
+  b <- getNOAA.bathy(BOX$lon[1], BOX$lon[2], BOX$lat[1], BOX$lat[2], resolution = 1, keep = TRUE,
+                     path = dir_derived)
+  out <- list(
+    bathy = as.xyz(b) %>% set_names(c("lon", "lat", "z")) %>% filter(z <= 0),
+    iso   = as.contour(rast(as.xyz(b), type = "xyz", crs = "EPSG:4326"),
+                       levels = c(-200, -1000, -2000, -3000)) %>%
+            st_as_sf() %>% st_set_crs(4326) %>% mutate(depth_m = -level),
+    land  = ne_countries(scale = "medium", returnclass = "sf") %>% st_make_valid() %>%
+            st_crop(st_bbox(c(xmin = BOX$lon[1], xmax = BOX$lon[2],
+                              ymin = BOX$lat[1], ymax = BOX$lat[2]), crs = st_crs(4326))))
+  saveRDS(out, f); out
+}
+
+map_frame <- list(coord_sf(xlim = BOX$lon, ylim = MAP_LAT, expand = FALSE), labs(x = NULL, y = NULL),
+                  theme(panel.grid = element_blank()))
+
+# Derived tables the analyses all start from.
+load_data <- function() {
+  rec <- read_csv(file.path(dir_derived, "cobia_records.csv"), show_col_types = FALSE) %>%
+    mutate(size_class = factor(size_class, levels = SIZE_LEVELS))
+  list(records = rec,
+       gulf    = rec %>% filter(in_box(.)),
+       # numerator for any rate: same gears and sorted status as the effort pool
+       rates   = rec %>% filter(in_box(.), gear %in% c("Bongo", "Neuston"), sort_ist %in% SORTED),
+       lengths = read_csv(file.path(dir_derived, "lengths.csv"), show_col_types = FALSE) %>%
+                   mutate(size = factor(size, levels = SIZE_LEVELS)),
+       effort  = read_csv(file.path(dir_derived, "effort.csv"), show_col_types = FALSE))
+}
+
+# Each analysis stashes its panel so 08 can assemble without recomputing.
+save_panel <- function(p, name) saveRDS(p, file.path(dir_derived, "panels", paste0(name, ".rds")))
+load_panel <- function(name) readRDS(file.path(dir_derived, "panels", paste0(name, ".rds")))
+
+# main_  figures that carry a result
+# explore_  working figures and checks
+save_fig <- function(p, name, width, height, dpi = 300) {
   ggsave(file.path(dir_fig, paste0(name, ".png")), p, width = width, height = height,
          dpi = dpi, bg = "white")
-  ggsave(file.path(dir_fig, paste0(name, ".tiff")), p, width = width, height = height,
-         dpi = dpi, bg = "white", compression = "lzw")
+  invisible(file.path(dir_fig, paste0(name, ".png")))
 }

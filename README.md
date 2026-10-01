@@ -29,18 +29,20 @@ early-life-history document.
 ## Running it
 
 ```r
-source("R/run_all.R")     # first run downloads ~300 MB from GSMFC
+rmarkdown::render("01_data.Rmd",     output_dir = "docs")   # first run downloads ~300 MB
+rmarkdown::render("02_analysis.Rmd", output_dir = "docs")
 ```
 
-| script | does |
+| file | |
 |---|---|
-| `R/00_setup.R` | packages, paths, SEAMAP code lookups, size bins |
-| `R/01_download_seamap.R` | fetch and unzip the plankton archive |
-| `R/02_build_data.R` | stations, effort, cobia catch, lengths into `data/derived/` |
-| `R/03_figures.R` | results figure |
-| `R/04_qc.R` | 24 checks, writes `output/logs/qc.txt` |
+| `R/setup.R` | packages, paths, SEAMAP code lookups, size bins, basemap |
+| `01_data.Rmd` | download, stations, effort, catch, lengths into `data/derived/` |
+| `02_analysis.Rmd` | distribution, season, the two shelves, size, day and night |
+| `docs/*.html` | knitted output |
 
-tidyverse, sf, terra, marmap, patchwork, rnaturalearth.
+Figures land in `output/figures/`, `main_` for results and `explore_` for checks.
+
+tidyverse, sf, terra, marmap, patchwork, rnaturalearth, rmarkdown.
 
 ## Data
 

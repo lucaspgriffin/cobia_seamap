@@ -1,0 +1,318 @@
+---
+title: "Cobia larvae in the SEAMAP plankton survey: analysis"
+output:
+  html_document: { toc: true, toc_float: true, df_print: kable, theme: flatly }
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, comment = "",
+                      fig.path = "output/figures/", dev = "png", dpi = 300,
+                      # knitr appends -1 to the chunk name; drop it
+                      fig.process = function(f) {
+                        g <- sub("-1\\.png$", ".png", f)
+                        if (f != g) file.rename(f, g)
+                        g
+                      })
+```
+
+```{r src}
+source("R/setup.R")
+d  <- load_data()
+bm <- basemap()
+```
+
+Two rules run through everything below. A catch rate divides by effort drawn from the same pool as
+the numerator, which here means sorted bongo and neuston deployments. And place is never compared
+on all-year effort, because the survey does not sample the same areas every month.
+
+```{r excluded}
+sprintf("off-gear or unsorted, kept on the map but out of every rate: %d records, %.0f larvae",
+        nrow(d$gulf) - nrow(d$rates), sum(d$gulf$n_total) - sum(d$rates$n_total))
+```
+
+# Distribution
+
+Every record in the study box, coloured by the size class holding most of the tow. Descriptive, so
+no effort is involved; the catch-rate maps come later.
+
+```{r dist-numbers}
+count(d$gulf, size_class)
+d$gulf %>% slice_max(n_total, n = 3) %>% select(date, lat, lon, gear, n_total, n_meas)
+```
+
+Catches are heavily skewed. The median tow holds one larva and 79% hold one or two, but a neuston
+tow off the delta on 8 June 2012 held 232, with the adjacent station the same day holding 38. The
+whole sample was sorted in that case, so the number is real rather than a sub-sampling artefact.
+Symbol size is binned for that reason: a continuous scale lets the one tow flatten everything else.
+
+```{r main_distribution, fig.width = 9, fig.height = 5.6}
+p_dist <- ggplot() +
+  geom_raster(data = bm$bathy, aes(lon, lat, fill = z), interpolate = TRUE) +
+  scale_fill_gradient(low = "#1f3d6b", high = "#dbe9f6", name = "Depth (m)",
+                      labels = function(x) -x, breaks = c(0, -3000, -6000),
+                      guide = guide_colourbar(order = 3, barwidth = unit(48, "pt"),
+                                              barheight = unit(6, "pt"))) +
+  geom_sf(data = filter(bm$iso, depth_m == 200), colour = "grey20", linewidth = 0.35) +
+  geom_sf(data = filter(bm$iso, depth_m > 200), colour = "grey35", linewidth = 0.2,
+          linetype = "dotted") +
+  geom_sf(data = bm$land, fill = "grey85", colour = "grey40", linewidth = 0.2) +
+  geom_point(data = DWH, aes(lon, lat), shape = 8, size = 2.6, stroke = 0.9) +
+  annotate("text", x = DWH$lon + 0.3, y = DWH$lat - 0.45, label = "DWH", size = 2.9, hjust = 0) +
+  # smallest drawn last so they are not buried under the commoner medium tows
+  geom_point(data = d$gulf %>% filter(!is.na(size_class)) %>%
+               arrange(desc(as.integer(size_class)), desc(n_total)),
+             aes(lon, lat, size = n_total, colour = size_class), alpha = 0.75) +
+  scale_colour_manual(values = SIZE_COLS, name = "Most of the tow", drop = FALSE) +
+  scale_size_binned(breaks = c(1, 5, 20, 100), range = c(1.2, 6.5), name = "Larvae per tow",
+                    nice.breaks = FALSE) +
+  guides(colour = guide_legend(order = 1, override.aes = list(size = 3.6, alpha = 1)),
+         size = guide_bins(order = 2, override.aes = list(colour = "grey45"))) +
+  map_frame +
+  theme(panel.background = element_rect(fill = "#dbe9f6"), legend.box = "horizontal",
+        legend.box.just = "top", legend.spacing.x = unit(10, "pt"))
+p_dist
+```
+
+# Season
+
+Held to shelf stations and to 1982--2016, so the months sit on one footprint and one year range.
+Gulf-wide effort mixes shelf and deep water in proportions that change month to month, and
+June--July sampling ends in 2016 while September sampling continues.
+
+```{r season-rates}
+shelf <- function(x) filter(x, sta_depth_m > 0, sta_depth_m <= SHELF_M, year %in% SERIES)
+recs  <- shelf(d$rates)
+cpue  <- recs %>% count(month, wt = n_total, name = "n_larvae") %>%
+  complete(month = 1:12, fill = list(n_larvae = 0)) %>%
+  left_join(shelf(d$effort) %>% count(month, name = "n_tows"), by = "month") %>%
+  mutate(per_100 = if_else(n_tows > 0, 100 * n_larvae / n_tows, NA_real_),
+         month_lab = factor(month.abb[month], levels = month.abb))
+write_csv(cpue, file.path(dir_derived, "cpue_by_month.csv"), na = "")
+cpue %>% select(month_lab, n_larvae, n_tows, per_100)
+```
+
+September carries more sorted shelf tows than any other month, so in raw counts it looks like a
+second spawning peak. Dividing by effort removes it.
+
+The peak is not a footprint artefact either. Held to the Texas--Louisiana shelf alone, which is
+sampled in every month, the margin widens rather than narrows.
+
+```{r season-fixed-area}
+tx <- d$effort %>% filter(region == "Texas-Louisiana shelf", year %in% SERIES) %>%
+  count(month, name = "tows") %>%
+  left_join(d$rates %>% filter(region == "Texas-Louisiana shelf", year %in% SERIES) %>%
+              count(month, wt = n_total, name = "larvae"), by = "month") %>%
+  mutate(rate = round(100 * coalesce(larvae, 0) / tows, 1))
+tx %>% filter(month %in% c(5:9)) %>% select(month, tows, larvae, rate)
+```
+
+Abundance peaks in June but the smallest larvae peak in May, which fits a cohort spawned in or
+before May rather than peak spawning in June. Two thirds of larvae were measured, so the bar is
+split by the measured composition of that month.
+
+```{r main_season, fig.width = 5, fig.height = 3.2}
+mix <- d$lengths %>% inner_join(select(recs, v_c_p_s_cat, month), by = "v_c_p_s_cat") %>%
+  count(month, size, name = "n_meas") %>%
+  group_by(month) %>% mutate(share = n_meas / sum(n_meas)) %>% ungroup()
+
+p_season <- cpue %>% select(month, month_lab, per_100) %>% inner_join(mix, by = "month") %>%
+  ggplot(aes(month_lab, per_100 * share, fill = size)) +
+  geom_col(colour = "grey20", linewidth = 0.2) +
+  scale_fill_manual(values = SIZE_COLS, name = NULL, drop = FALSE,
+                    guide = guide_legend(reverse = TRUE)) +
+  scale_x_discrete(labels = substr(month.abb, 1, 1), drop = FALSE) +
+  theme(legend.position = "right", legend.key.size = unit(8, "pt"),
+        legend.text = element_text(size = 7)) +
+  labs(x = NULL, y = "Cobia larvae per 100 sorted\nshelf tows, 1982-2016")
+p_season
+```
+
+# The two shelves
+
+Gravid cobia are taken on the west Florida shelf, so an apparent scarcity of larvae there has to
+be tested against season-matched effort rather than read off an annual map. West Florida takes
+only about 12% of its shelf tows in June--July against 27% on the Texas--Louisiana shelf, because
+the summer survey works west of 88 W. Everything here is restricted to June--July for that reason.
+
+```{r shelf-cells}
+peak_eff  <- d$effort %>% filter(month %in% PEAK)
+peak_recs <- d$rates  %>% filter(month %in% PEAK)
+CELL <- 0.5
+cell <- function(x) mutate(x, cx = floor(lon / CELL) * CELL + CELL / 2,
+                              cy = floor(lat / CELL) * CELL + CELL / 2)
+cells <- cell(peak_eff) %>% count(cx, cy, name = "n_tows") %>%
+  left_join(cell(peak_recs) %>% group_by(cx, cy) %>%
+              summarise(n_larvae = sum(n_total), .groups = "drop"), by = c("cx", "cy")) %>%
+  mutate(n_larvae = coalesce(n_larvae, 0), per_100 = 100 * n_larvae / n_tows,
+         searched = n_tows >= 10)
+sprintf("cells with >=10 June-July tows: %d; of those with no cobia: %d",
+        sum(cells$searched), sum(cells$searched & cells$n_larvae == 0))
+```
+
+```{r main_shelf_maps, fig.width = 9, fig.height = 4.4}
+frame <- list(geom_sf(data = filter(bm$iso, depth_m == 200), colour = "grey35", linewidth = 0.3),
+              geom_sf(data = bm$land, fill = "grey85", colour = "grey40", linewidth = 0.2),
+              map_frame, theme(panel.background = element_rect(fill = "white")),
+              theme(plot.title = element_text(size = 8.5, face = "plain")))
+p_eff <- ggplot() + geom_tile(data = cells, aes(cx, cy, fill = n_tows)) +
+  scale_fill_viridis_c(trans = "log10", option = "mako", direction = -1,
+                       name = "Sorted June-July\ndeployments", breaks = c(1, 10, 100)) +
+  frame + ggtitle("June-July sampling")
+p_rate <- ggplot() +
+  geom_tile(data = filter(cells, searched, n_larvae == 0), aes(cx, cy), fill = "grey88") +
+  geom_tile(data = filter(cells, n_larvae > 0), aes(cx, cy, fill = per_100)) +
+  scale_fill_viridis_c(trans = "sqrt", option = "inferno", direction = -1,
+                       name = "Cobia larvae per\n100 deployments", breaks = c(10, 100, 300)) +
+  frame + ggtitle("June-July catch rate")
+p_eff | p_rate
+```
+
+A deployment is a station and a gear, which is what the denominator counts. Joining catch on
+station alone would give each tow's larvae to both the bongo and the neuston row and double the
+rate. Intervals are bootstrapped over tows, since larvae cluster within a tow and a Poisson
+interval would be far too tight.
+
+```{r shelf-rates}
+tow_catch <- peak_recs %>% filter(year %in% SERIES) %>%
+  mutate(gear_class = if_else(gear == "Neuston", "Neuston", "Bongo")) %>%
+  group_by(v_c_p, gear_class) %>% summarise(n = sum(n_total), .groups = "drop")
+set.seed(7)
+boot_ci <- function(x, n = 2000) quantile(replicate(n, 100 * mean(sample(x, replace = TRUE))),
+                                          c(0.025, 0.975))
+reg <- peak_eff %>% filter(!is.na(region), year %in% SERIES) %>%
+  select(v_c_p, gear, region) %>%
+  left_join(tow_catch, by = c("v_c_p", "gear" = "gear_class")) %>%
+  mutate(n = coalesce(n, 0)) %>%
+  group_by(region) %>%
+  summarise(tows = n(), larvae = sum(n), rate = 100 * mean(n), pct_tows_with = 100 * mean(n > 0),
+            lo = boot_ci(n)[1], hi = boot_ci(n)[2], .groups = "drop")
+write_csv(reg, file.path(dir_derived, "shelf_comparison.csv"))
+reg
+```
+
+Not only season: the two are also comparable on depth, gear and spread over years, so the
+difference is not a by-product of what was sampled.
+
+```{r shelf-controls}
+peak_eff %>% filter(!is.na(region), year %in% SERIES) %>%
+  group_by(region) %>%
+  summarise(years = n_distinct(year), depth_med = round(median(sta_depth_m)),
+            depth_q1 = round(quantile(sta_depth_m, .25)),
+            depth_q3 = round(quantile(sta_depth_m, .75)),
+            pct_bongo = round(100 * mean(gear == "Bongo")), .groups = "drop")
+```
+
+```{r main_shelf_bar, fig.width = 4, fig.height = 3.4}
+p_bar <- ggplot(reg, aes(reorder(str_remove(region, " shelf"), -rate), rate)) +
+  geom_col(fill = "#0072B2", colour = "grey20", linewidth = 0.2, width = 0.6) +
+  geom_errorbar(aes(ymin = lo, ymax = hi), width = 0.15, linewidth = 0.4) +
+  geom_text(aes(y = hi, label = sprintf("%d tows\n%.0f larvae", tows, larvae)),
+            vjust = -0.3, size = 2.5, lineheight = 0.95) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.28))) +
+  labs(x = NULL, y = "Larvae per 100 shelf tows,\nJune-July 1982-2016")
+p_bar
+```
+
+# Size
+
+```{r size-tables}
+by_depth <- d$lengths %>%
+  inner_join(select(d$gulf, v_c_p_s_cat, sta_depth_m, month), by = "v_c_p_s_cat") %>%
+  filter(sta_depth_m > 0)
+by_depth %>% mutate(where = if_else(sta_depth_m <= SHELF_M, "shelf", "off-shelf")) %>%
+  group_by(where) %>% summarise(n = n(), median_mm = median(length_mm),
+                                median_depth_m = round(median(sta_depth_m)))
+by_depth %>% filter(month %in% 4:10) %>% count(month, size) %>%
+  group_by(month) %>% mutate(pct = round(100 * n / sum(n))) %>%
+  select(-n) %>% pivot_wider(names_from = size, values_from = pct)
+```
+
+```{r main_size_depth, fig.width = 5, fig.height = 3.4}
+p_size <- ggplot(by_depth, aes(sta_depth_m, length_mm, colour = size)) +
+  geom_point(alpha = 0.45, size = 1.4) +
+  scale_colour_manual(values = SIZE_COLS, guide = "none") +
+  scale_x_log10(breaks = c(10, 30, 100, 300, 1000, 3000)) +
+  geom_vline(xintercept = SHELF_M, linetype = "dashed", colour = "grey40") +
+  labs(x = "Station depth (m, log scale)", y = "Larval length (mm)")
+p_size
+```
+
+The cut-off for the smallest class has no strong basis, so the shelf result is checked against it
+rather than resting on it. It weakens gradually as larger and more dispersed larvae are swept in,
+which is what should happen, and never reverses.
+
+```{r explore_size_cutoff}
+map_dfr(c(3, 3.2, 3.5, 4, 4.5, 5), function(cut) {
+  keep <- d$lengths %>% group_by(v_c_p_s_cat) %>%
+    summarise(hit = any(length_mm <= cut), .groups = "drop") %>% filter(hit)
+  g <- d$gulf %>% filter(v_c_p_s_cat %in% keep$v_c_p_s_cat, !is.na(sta_depth_m))
+  tibble(cut_mm = cut, larvae = sum(d$lengths$length_mm <= cut), records = nrow(g),
+         pct_shelf = round(100 * mean(g$sta_depth_m <= SHELF_M)))
+})
+```
+
+# Day and night
+
+Pooled rates run higher at night, which could be larvae avoiding the net in daylight or larvae
+sitting deeper by day. The two make opposite predictions. Avoidance should bite hardest on the
+largest larvae, which see better and swim harder. Vertical movement should push catch between the
+gears, since neuston fishes the top half-metre and bongo obliquely through the column.
+
+```{r diel-table}
+diel <- d$lengths %>%
+  inner_join(d$rates %>% filter(!is.na(night)) %>% select(v_c_p_s_cat, gear, night),
+             by = "v_c_p_s_cat") %>%
+  count(gear, night, size, name = "larvae") %>%
+  left_join(d$effort %>% filter(!is.na(night)) %>% count(gear, night, name = "tows"),
+            by = c("gear", "night")) %>%
+  mutate(per_100 = 100 * larvae / tows) %>%
+  select(gear, size, night, per_100) %>%
+  pivot_wider(names_from = night, values_from = per_100, names_prefix = "n") %>%
+  transmute(gear, size, day = round(nFALSE, 2), night = round(nTRUE, 2),
+            ratio = round(nTRUE / nFALSE, 2)) %>% arrange(gear, size)
+write_csv(diel, file.path(dir_derived, "diel_by_gear_size.csv"))
+diel
+```
+
+The neuston night:day ratio falls with larval size, which is backwards for net avoidance. And the
+two gears move in opposite directions: bongo takes the smaller classes more by day while neuston
+takes them more by night. That is what vertical movement between the gears' depths looks like.
+The bongo large-larva cell is 0.01 against 0.05 per 100 tows, which is noise.
+
+```{r explore_diel, fig.width = 6, fig.height = 3.2}
+diel %>% pivot_longer(c(day, night), names_to = "tod", values_to = "per_100") %>%
+  ggplot(aes(size, per_100, fill = tod)) +
+  geom_col(position = "dodge", colour = "grey20", linewidth = 0.2, width = 0.7) +
+  facet_wrap(~ gear, scales = "free_y") +
+  scale_fill_manual(values = c(day = "#E8C547", night = "#2F4858"), name = NULL) +
+  scale_x_discrete(labels = c("<5", "5-15", ">15")) +
+  labs(x = "Larval length (mm)", y = "Measured larvae per 100 tows")
+```
+
+Daytime sampling on the early trawl surveys is a documented bias, corrected around 1995. Across
+that break the daytime rate rises about thirtyfold while the night rate barely moves, which points
+at the early daytime samples rather than at the ocean. No interannual trend is plotted for that
+reason, although catch rates do rise about tenfold from the 1980s to the 2010s.
+
+```{r diel-era}
+era <- d$effort %>% filter(!is.na(night), month %in% PEAK, sta_depth_m > 0,
+                           sta_depth_m <= SHELF_M, year %in% SERIES) %>%
+  mutate(era = if_else(year < 1995, "1982-1994", "1995-2016")) %>%
+  count(era, night, name = "tows") %>%
+  left_join(d$rates %>% filter(!is.na(night), month %in% PEAK, sta_depth_m > 0,
+                               sta_depth_m <= SHELF_M, year %in% SERIES) %>%
+              mutate(era = if_else(year < 1995, "1982-1994", "1995-2016")) %>%
+              count(era, night, wt = n_total, name = "larvae"), by = c("era", "night")) %>%
+  mutate(larvae = coalesce(larvae, 0), per_100 = round(100 * larvae / tows, 1))
+write_csv(era, file.path(dir_derived, "diel_by_era.csv"))
+era
+```
+
+# Results figure
+
+```{r main_results, fig.width = 9.5, fig.height = 11.5}
+(p_dist) / (p_eff | p_rate) / (p_season | p_bar | p_size) +
+  plot_layout(heights = c(1.9, 1.5, 1.05)) +
+  plot_annotation(tag_levels = "A") &
+  theme(plot.tag = element_text(size = 11, face = "bold"))
+```
