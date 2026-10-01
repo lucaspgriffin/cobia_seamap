@@ -316,3 +316,112 @@ era
   plot_annotation(tag_levels = "A") &
   theme(plot.tag = element_text(size = 11, face = "bold"))
 ```
+
+# Checks
+
+Each line reports PASS, FAIL or FLAG with the numbers behind it. FLAG marks a limitation worth
+knowing rather than an error.
+
+```{r checks}
+fails <- character()
+say <- function(ok, label, detail = "") {
+  tag <- if (is.na(ok)) "FLAG" else if (ok) "PASS" else "FAIL"
+  if (!is.na(ok) && !ok) fails <<- c(fails, label)
+  cat(sprintf("[%s] %-52s %s\n", tag, label, detail))
+}
+isarwk <- read_seamap("ISARWK.csv")
+raw <- isarwk %>% filter(str_detect(toupper(TAXON), "^RACHYCENTR")) %>%
+  mutate(n = (coalesce(as.numeric(MEAS), 0) + coalesce(as.numeric(NOT_MEAS), 0)) *
+             coalesce(ALIQ_MULT[ALIQUOT], 1))
+
+cat("-- extraction --\n")
+say(nrow(isarwk %>% filter(str_detect(toupper(TAXON), "RACHYCENTR")) %>% distinct(TAXON)) ==
+    nrow(distinct(raw, TAXON)), "taxon filter admits no partial-name matches",
+    paste(sort(unique(raw$TAXON)), collapse = "; "))
+say(nrow(raw) == nrow(d$records), "record count matches the raw table", nrow(d$records))
+say(abs(sum(raw$n) - sum(d$records$n_total)) < 1e-6, "aliquot-corrected larva count matches",
+    sprintf("%.0f larvae, %d sub-sampled", sum(d$records$n_total), sum(d$records$aliquot != "1/1")))
+say(all(raw$ALIQUOT %in% names(ALIQ_MULT)), "every aliquot value is recognised")
+say(!any(duplicated(d$records$v_c_p_s_cat)), "catalogue keys are unique")
+
+cat("\n-- station join --\n")
+say(all(!is.na(d$records$lat)), "every record joined to a station")
+say(all(d$records$lat > 17 & d$records$lat < 40), "latitudes plausible",
+    sprintf("%.1f to %.1f N", min(d$records$lat), max(d$records$lat)))
+say(all(d$records$date <= Sys.Date()), "dates in range",
+    sprintf("%s to %s", min(d$records$date), max(d$records$date)))
+say(NA, "records outside the study box", nrow(d$records) - nrow(d$gulf))
+
+cat("\n-- numerator against denominator --\n")
+off <- d$gulf %>% filter(!gear %in% c("Bongo", "Neuston")) %>% count(gear, wt = n_total)
+say(NA, "cobia taken by gear outside the effort pool",
+    if (nrow(off) == 0) "none" else sprintf("%.0f larvae in %s; out of rates", sum(off$n), off$gear))
+say(NA, "cobia tows not flagged sorted", sum(!d$gulf$sort_ist %in% SORTED))
+chk <- d$gulf %>% filter(gear %in% c("Bongo", "Neuston"), sort_ist %in% SORTED,
+                         sta_depth_m > 0, sta_depth_m <= SHELF_M, year %in% SERIES)
+say(abs(sum(cpue$n_larvae) - sum(chk$n_total)) < 1e-6,
+    "rate numerator reproduces under all four filters",
+    sprintf("%.0f in the rates, %.0f in the box", sum(cpue$n_larvae), sum(d$gulf$n_total)))
+say(max(d$effort$year[d$effort$month %in% PEAK & d$effort$sta_depth_m <= SHELF_M]) <= 2016,
+    "June-July shelf series ends before the records do",
+    sprintf("records to %d", max(d$gulf$year)))
+
+cat("\n-- lengths --\n")
+say(NA, "measurement coverage",
+    sprintf("%d of %.0f (%.0f%%)", sum(d$gulf$n_meas, na.rm = TRUE), sum(d$gulf$n_total),
+            100 * sum(d$gulf$n_meas, na.rm = TRUE) / sum(d$gulf$n_total)))
+big <- d$gulf %>% filter(n_total > 10)
+say(NA, "large tows with under half measured",
+    sprintf("%d of %d tows holding >10 larvae",
+            sum(big$n_meas / big$n_total < 0.5, na.rm = TRUE), nrow(big)))
+say(all(d$lengths$length_mm > 1 & d$lengths$length_mm < 70), "lengths plausible",
+    sprintf("%.1f to %.1f mm", min(d$lengths$length_mm), max(d$lengths$length_mm)))
+say(all(d$gulf$n_meas <= d$gulf$n_total, na.rm = TRUE), "measured never exceeds counted")
+say(all(d$gulf$n_small + d$gulf$n_mid + d$gulf$n_big == d$gulf$n_meas, na.rm = TRUE),
+    "size-class counts sum to the measured total")
+
+cat("\n-- depth --\n")
+chk_d <- d$gulf %>% filter(sta_depth_m > 0)
+chk_d$etopo <- -terra::extract(rast(as.xyz(getNOAA.bathy(BOX$lon[1], BOX$lon[2], BOX$lat[1],
+                                 BOX$lat[2], resolution = 1, keep = TRUE, path = dir_derived)),
+                                 type = "xyz", crs = "EPSG:4326"),
+                               as.matrix(chk_d[, c("lon", "lat")]))[, 1]
+chk_d <- filter(chk_d, etopo > 0)
+rr <- cor(log10(chk_d$sta_depth_m), log10(chk_d$etopo))
+say(rr > 0.9, "recorded depth agrees with ETOPO",
+    sprintf("r = %.3f on log depth, n = %d", rr, nrow(chk_d)))
+
+cat("\n-- confounding --\n")
+say(min(tx$rate[tx$month %in% PEAK]) > 2 * tx$rate[tx$month == 9],
+    "June-July peak survives on one fixed area",
+    sprintf("Jun %.1f, Jul %.1f, Sep %.1f", tx$rate[tx$month == 6], tx$rate[tx$month == 7],
+            tx$rate[tx$month == 9]))
+tod_e <- d$effort %>% filter(!is.na(night), sta_depth_m > 0, sta_depth_m <= SHELF_M,
+                             year %in% SERIES) %>% count(month, night, name = "tows")
+tod <- d$rates %>% filter(!is.na(night), sta_depth_m > 0, sta_depth_m <= SHELF_M,
+                          year %in% SERIES) %>%
+  count(month, night, wt = n_total, name = "larvae") %>%
+  right_join(tod_e, by = c("month", "night")) %>%
+  mutate(rate = 100 * coalesce(larvae, 0) / tows)
+pk_d <- max(tod$rate[tod$month %in% PEAK & !tod$night]); sp_d <- tod$rate[tod$month == 9 & !tod$night]
+pk_n <- max(tod$rate[tod$month %in% PEAK & tod$night]);  sp_n <- tod$rate[tod$month == 9 & tod$night]
+say(pk_d > 3 * sp_d && pk_n > 3 * sp_n, "peak present in day and night tows separately",
+    sprintf("day %.1f vs %.1f; night %.1f vs %.1f", pk_d, sp_d, pk_n, sp_n))
+say(nrow(reg) == 2 && all(reg$tows > 300), "regional comparison season-matched, both sides sampled",
+    paste(sprintf("%s %.1f/100 on %d tows", str_remove(reg$region, " shelf"), reg$rate, reg$tows),
+          collapse = "; "))
+wf <- d$effort %>% filter(!is.na(region), sta_depth_m <= SHELF_M) %>%
+  group_by(region) %>% summarise(pct = 100 * mean(month %in% PEAK), .groups = "drop")
+say(NA, "share of shelf tows taken in June-July",
+    paste(sprintf("%s %.0f%%", str_remove(wf$region, " shelf"), wf$pct), collapse = "; "))
+say(NA, "daytime rate across the 1995 protocol change",
+    sprintf("day x%.0f, night x%.1f; no trend fitted",
+            era$per_100[era$era == "1995-2016" & !era$night] /
+              era$per_100[era$era == "1982-1994" & !era$night],
+            era$per_100[era$era == "1995-2016" & era$night] /
+              era$per_100[era$era == "1982-1994" & era$night]))
+
+cat("\n")
+if (length(fails)) { cat("FAILED:\n"); for (f in fails) cat(" -", f, "\n") } else
+  cat("All hard checks passed. FLAG lines are limitations, not errors.\n")
+```

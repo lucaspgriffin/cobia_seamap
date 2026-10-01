@@ -37,7 +37,7 @@ rmarkdown::render("02_analysis.Rmd", output_dir = "docs")
 |---|---|
 | `R/setup.R` | packages, paths, SEAMAP code lookups, size bins, basemap |
 | `01_data.Rmd` | download, stations, effort, catch, lengths into `data/derived/` |
-| `02_analysis.Rmd` | distribution, season, the two shelves, size, day and night |
+| `02_analysis.Rmd` | distribution, season, the two shelves, size, day and night, checks |
 | `docs/*.html` | knitted output |
 
 Figures land in `output/figures/`, `main_` for results and `explore_` for checks.
