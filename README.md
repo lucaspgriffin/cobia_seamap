@@ -1,11 +1,11 @@
 # Cobia larvae in the SEAMAP plankton survey
 
 Distribution and seasonality of cobia (*Rachycentron canadum*) larvae in the northern Gulf of
-Mexico, from the SEAMAP ichthyoplankton survey, 1982–2024.
+Mexico from the SEAMAP ichthyoplankton survey, 1982-2024.
 
-The survey identifies cobia to species itself, so everything here comes from the public archive —
-no specimen loan or re-sorting. 549 catch records holding 1,501 larvae, against 76 in Ditty and
-Shaw (1992), the standard reference for cobia early life history in the Gulf.
+SEAMAP identifies cobia to species, so the analysis runs off the public archive with no specimen
+loan or re-sorting. The archive holds 549 catch records and 1,501 larvae. Ditty and Shaw (1992),
+the standard reference for cobia early life history in the Gulf, examined 76.
 
 ## Running it
 
@@ -13,77 +13,94 @@ Shaw (1992), the standard reference for cobia early life history in the Gulf.
 source("R/run_all.R")     # first run downloads ~300 MB from GSMFC
 ```
 
-Or step by step:
-
-| | |
+| script | does |
 |---|---|
 | `R/00_setup.R` | packages, paths, SEAMAP code lookups, size bins |
 | `R/01_download_seamap.R` | fetch and unzip the plankton archive |
-| `R/02_build_data.R` | stations, effort, cobia catch, lengths → `data/derived/` |
-| `R/03_figures.R` | the results figure |
-| `R/04_qc.R` | 24 checks; writes `output/logs/qc.txt` |
+| `R/02_build_data.R` | stations, effort, cobia catch, lengths into `data/derived/` |
+| `R/03_figures.R` | results figure |
+| `R/04_qc.R` | 24 checks, writes `output/logs/qc.txt` |
 
-Needs tidyverse, sf, terra, marmap, patchwork, rnaturalearth.
+Requires tidyverse, sf, terra, marmap, patchwork, rnaturalearth.
 
-## Getting the SEAMAP data
+## The SEAMAP data
 
-`https://seamapdata.gsmfc.org/` → Plankton Survey Data (CSV). One zip of the whole archive,
-re-released periodically; `01_download_seamap.R` records the release it used in
-`data/raw/seamap/SOURCE.txt`.
+Download from https://seamapdata.gsmfc.org/ under Plankton Survey Data (CSV). It comes as one zip
+of the whole archive and is re-released periodically. `01_download_seamap.R` writes the release it
+used to `data/raw/seamap/SOURCE.txt`.
 
-Four tables matter:
+Four tables are used:
 
-| table | one row per | used for |
+| table | one row per | fields used |
 |---|---|---|
-| `STAREC` | station | date, time, position, depth (**fathoms**), gears deployed |
+| `STAREC` | station | date, time, position, depth (fathoms), gears deployed |
 | `ISTRWK` | plankton sample | gear code, mesh, volume filtered, sorted flag |
-| `ISARWK` | taxon × sample | counts, aliquot |
+| `ISARWK` | taxon within a sample | counts, aliquot |
 | `ILFRWK` | measured larva | length |
 
-They join on `V_C_P` (vessel-cruise-station) and `V_C_P_S` (+ sample), with `V_C_P_S_CAT`
-(+ catalogue) linking lengths to a catch record.
+Keys are `V_C_P` (vessel, cruise, station), `V_C_P_S` (plus sample) and `V_C_P_S_CAT` (plus
+catalogue), which is what links a length to a catch record.
 
-## Things that will bite you
+## Working with these tables
 
-- **`DEPTH_SSTA` is fathoms, not metres.** Multiply by 1.8288.
-- **Counts are of what was sorted.** 12 cobia records come from half the sample; divide the
-  `ALIQUOT` back out or you undercount.
-- **Effort must come from the same pool as the catch.** Rates here divide by sorted bongo and
-  neuston deployments, so 23 larvae taken by MOCNESS and 2 tows never flagged sorted are excluded
-  from the rates. They stay on the map.
-- **A deployment is a station *and* gear.** Joining catch on station alone gives each tow's larvae
-  to both the bongo and the neuston row and doubles the rate.
-- **The survey does not sample the same places every month.** The spring survey works the open
-  Gulf, the fall survey the shelf, and the June–July sampling is piggybacked on the shrimp trawl
-  survey and so only runs west of 88°W. Comparing places on all-year effort reads as where the
-  survey went, not where the fish were.
-- **June–July sampling stopped in 2016**, when plankton work on the summer trawl survey was
-  discontinued. There is not one June or July shelf tow after that, so the seasonal series is
-  1982–2016 even though records run to 2024.
-- **`LIFE_STAGE` is documented as "currently not in use"** and its values are crustacean stages.
+A few things in the data are easy to get wrong.
 
-## What the data supports
+`DEPTH_SSTA` is in fathoms. Multiply by 1.8288 for metres.
 
-- a sharp **June–July** peak, 26.4 and 16.1 larvae per 100 sorted shelf tows against ~4 in May,
-  August and September; survives fixing the area, the year range and the time of day
-- cobia larvae about **six times scarcer on the west Florida shelf** than the Texas–Louisiana
-  shelf within June–July, matched for depth, gear and years — scarcer, not absent
-- small larvae peak in **May** while abundance peaks in June, which is a cohort growing rather
-  than peak spawning in June
-- larvae are a **neuston catch**: 12.2 per 100 neuston tows against 1.0 per 100 bongo
+Counts in `ISARWK` are of the fraction that was sorted. Twelve cobia records come from half the
+sample, so the `ALIQUOT` has to be divided back out.
 
-## What it does not
+Catch rates need a denominator drawn from the same pool as the numerator. Effort here is sorted
+bongo and neuston deployments, which means 23 larvae taken by MOCNESS and two tows that were never
+flagged as sorted are left out of the rates. They are still mapped.
 
-No ages. There is no age–length relation for wild cobia larvae — the published growth rates are
-from hatchery rearing — so no hatch dates and no back-calculated spawning times. The size classes
-are descriptive cuts, not stages; nobody has examined these specimens.
+A deployment is a station and a gear, not a station. Joining catch on `V_C_P` alone assigns each
+tow's larvae to both the bongo and the neuston row and doubles the rate.
 
-No interannual trend. Catch rates rise about tenfold from the 1980s to the 2010s, but daytime
-sampling on the early trawl surveys is a documented bias corrected around 1995, and across that
-break the daytime rate rises ~29× while the night rate barely moves. That is the sampling.
+Sampling is not spread evenly through the year or the Gulf. The spring survey works the open Gulf,
+the fall survey the shelf, and June-July plankton sampling was piggybacked on the shrimp trawl
+survey, which works west of 88 W. Dividing catch by all-year effort therefore describes where the
+survey went as much as where the fish were, so the regional comparison here is restricted to
+June-July and the monthly comparison to shelf stations.
+
+June-July sampling ended in 2016 when plankton work on the summer trawl survey was discontinued.
+There are no June or July shelf tows after that, so the seasonal series runs 1982-2016 even though
+records continue to 2024.
+
+`LIFE_STAGE` is documented as not in use, and its codes are crustacean stages.
+
+## Results
+
+Larval abundance peaks sharply in June and July, at 26.4 and 16.1 larvae per 100 sorted shelf tows
+against about 4 in May, August and September. The peak holds when the area, year range and time of
+day are held fixed.
+
+Within June-July, cobia larvae are about six times scarcer on the west Florida shelf than on the
+Texas-Louisiana shelf (4.1 against 25.8 per 100 tows), matched for depth, gear and years. Scarcer,
+not absent.
+
+The smallest larvae peak in May while abundance peaks in June, which fits a cohort spawned in or
+before May rather than peak spawning in June.
+
+Larvae are overwhelmingly a neuston catch: 12.2 per 100 neuston tows against 1.0 per 100 bongo.
+
+## Limitations
+
+No ages. There is no age-length relation for wild cobia larvae and the published growth rates come
+from hatchery rearing, so hatch dates and spawning times cannot be back-calculated. The size
+classes are descriptive cuts on length, not developmental stages, and no one has examined these
+specimens.
+
+No interannual trend. Catch rates rise roughly tenfold between the 1980s and the 2010s, but
+daytime sampling on the early trawl surveys was a known bias that was corrected around 1995.
+Across that break the daytime rate rises about 29-fold while the night rate barely changes, which
+points at the sampling rather than at abundance.
+
+Two thirds of larvae were measured, and coverage is worst in the largest tows: 11 of the 21 tows
+holding more than 10 larvae had fewer than half measured.
 
 ## Reference
 
 Ditty, J.G. and R.F. Shaw. 1992. Larval development, distribution, and ecology of cobia
 *Rachycentron canadum* (Family: Rachycentridae), in the northern Gulf of Mexico.
-*Fishery Bulletin* 90:668–677.
+*Fishery Bulletin* 90:668-677.
