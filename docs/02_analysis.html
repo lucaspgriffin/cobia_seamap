@@ -2333,140 +2333,557 @@ era</code></pre>
 </div>
 <div id="checks" class="section level1">
 <h1>Checks</h1>
-<p>Each line reports PASS, FAIL or FLAG with the numbers behind it. FLAG
-marks a limitation worth knowing rather than an error.</p>
-<pre class="r"><code>fails &lt;- character()
-say &lt;- function(ok, label, detail = &quot;&quot;) {
-  tag &lt;- if (is.na(ok)) &quot;FLAG&quot; else if (ok) &quot;PASS&quot; else &quot;FAIL&quot;
-  if (!is.na(ok) &amp;&amp; !ok) fails &lt;&lt;- c(fails, label)
-  cat(sprintf(&quot;[%s] %-52s %s\n&quot;, tag, label, detail))
-}
-isarwk &lt;- read_csv(&quot;data/raw/seamap/ISARWK.csv&quot;, col_types = cols(.default = col_character()),
+<p>Each block states what should be true, computes it, and shows both
+sides so the comparison is visible rather than reduced to a pass or
+fail.</p>
+<div id="extraction-reproduces-from-the-raw-table" class="section level2">
+<h2>Extraction reproduces from the raw table</h2>
+<p>Counts taken straight from <code>ISARWK</code> should equal what the
+pipeline carried forward.</p>
+<pre class="r"><code>isarwk &lt;- read_csv(&quot;data/raw/seamap/ISARWK.csv&quot;, col_types = cols(.default = col_character()),
                    show_col_types = FALSE, name_repair = &quot;minimal&quot;) %&gt;%
   rename_with(~ str_remove(.x, &quot;^\ufeff&quot;))
 ALIQ_MULT &lt;- c(&quot;1/1&quot; = 1, &quot;1/2&quot; = 2, &quot;1/4&quot; = 4, &quot;1/8&quot; = 8)
+
 raw &lt;- isarwk %&gt;% filter(str_detect(toupper(TAXON), &quot;^RACHYCENTR&quot;)) %&gt;%
   mutate(n = (coalesce(as.numeric(MEAS), 0) + coalesce(as.numeric(NOT_MEAS), 0)) *
              coalesce(ALIQ_MULT[ALIQUOT], 1))
 
-cat(&quot;-- extraction --\n&quot;)</code></pre>
-<pre><code>-- extraction --</code></pre>
-<pre class="r"><code>say(nrow(isarwk %&gt;% filter(str_detect(toupper(TAXON), &quot;RACHYCENTR&quot;)) %&gt;% distinct(TAXON)) ==
-    nrow(distinct(raw, TAXON)), &quot;taxon filter admits no partial-name matches&quot;,
-    paste(sort(unique(raw$TAXON)), collapse = &quot;; &quot;))</code></pre>
-<pre><code>[PASS] taxon filter admits no partial-name matches          RACHYCENTRIDAE; RACHYCENTRON; RACHYCENTRON CANADUM</code></pre>
-<pre class="r"><code>say(nrow(raw) == nrow(records), &quot;record count matches the raw table&quot;, nrow(records))</code></pre>
-<pre><code>[PASS] record count matches the raw table                   549</code></pre>
-<pre class="r"><code>say(abs(sum(raw$n) - sum(records$n_total)) &lt; 1e-6, &quot;aliquot-corrected larva count matches&quot;,
-    sprintf(&quot;%.0f larvae, %d sub-sampled&quot;, sum(records$n_total), sum(records$aliquot != &quot;1/1&quot;)))</code></pre>
-<pre><code>[PASS] aliquot-corrected larva count matches                1501 larvae, 12 sub-sampled</code></pre>
-<pre class="r"><code>say(all(raw$ALIQUOT %in% names(ALIQ_MULT)), &quot;every aliquot value is recognised&quot;)</code></pre>
-<pre><code>[PASS] every aliquot value is recognised                    </code></pre>
-<pre class="r"><code>say(!any(duplicated(records$v_c_p_s_cat)), &quot;catalogue keys are unique&quot;)</code></pre>
-<pre><code>[PASS] catalogue keys are unique                            </code></pre>
-<pre class="r"><code>cat(&quot;\n-- station join --\n&quot;)</code></pre>
-<pre><code>
--- station join --</code></pre>
-<pre class="r"><code>say(all(!is.na(records$lat)), &quot;every record joined to a station&quot;)</code></pre>
-<pre><code>[PASS] every record joined to a station                     </code></pre>
-<pre class="r"><code>say(all(records$lat &gt; 17 &amp; records$lat &lt; 40), &quot;latitudes plausible&quot;,
-    sprintf(&quot;%.1f to %.1f N&quot;, min(records$lat), max(records$lat)))</code></pre>
-<pre><code>[PASS] latitudes plausible                                  23.7 to 35.5 N</code></pre>
-<pre class="r"><code>say(all(records$date &lt;= Sys.Date()), &quot;dates in range&quot;,
-    sprintf(&quot;%s to %s&quot;, min(records$date), max(records$date)))</code></pre>
-<pre><code>[PASS] dates in range                                       1982-06-23 to 2024-09-05</code></pre>
-<pre class="r"><code>say(NA, &quot;records outside the study box&quot;, nrow(records) - nrow(gulf))</code></pre>
-<pre><code>[FLAG] records outside the study box                        2</code></pre>
-<pre class="r"><code>cat(&quot;\n-- numerator against denominator --\n&quot;)</code></pre>
-<pre><code>
--- numerator against denominator --</code></pre>
-<pre class="r"><code>off &lt;- gulf %&gt;% filter(!gear %in% c(&quot;Bongo&quot;, &quot;Neuston&quot;)) %&gt;% count(gear, wt = n_total)
-say(NA, &quot;cobia taken by gear outside the effort pool&quot;,
-    if (nrow(off) == 0) &quot;none&quot; else sprintf(&quot;%.0f larvae in %s; out of rates&quot;, sum(off$n), off$gear))</code></pre>
-<pre><code>[FLAG] cobia taken by gear outside the effort pool          23 larvae in MOCNESS; out of rates</code></pre>
-<pre class="r"><code>say(NA, &quot;cobia tows not flagged sorted&quot;, sum(!gulf$sort_ist %in% SORTED))</code></pre>
-<pre><code>[FLAG] cobia tows not flagged sorted                        2</code></pre>
-<pre class="r"><code>chk &lt;- gulf %&gt;% filter(gear %in% c(&quot;Bongo&quot;, &quot;Neuston&quot;), sort_ist %in% SORTED,
-                         sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M, year %in% SERIES)
-say(abs(sum(cpue$n_larvae) - sum(chk$n_total)) &lt; 1e-6,
-    &quot;rate numerator reproduces under all four filters&quot;,
-    sprintf(&quot;%.0f in the rates, %.0f in the box&quot;, sum(cpue$n_larvae), sum(gulf$n_total)))</code></pre>
-<pre><code>[PASS] rate numerator reproduces under all four filters     1262 in the rates, 1499 in the box</code></pre>
-<pre class="r"><code>say(max(effort$year[effort$month %in% PEAK &amp; effort$sta_depth_m &lt;= SHELF_M]) &lt;= 2016,
-    &quot;June-July shelf series ends before the records do&quot;,
-    sprintf(&quot;records to %d&quot;, max(gulf$year)))</code></pre>
-<pre><code>[PASS] June-July shelf series ends before the records do    records to 2024</code></pre>
-<pre class="r"><code>cat(&quot;\n-- lengths --\n&quot;)</code></pre>
-<pre><code>
--- lengths --</code></pre>
-<pre class="r"><code>say(NA, &quot;measurement coverage&quot;,
-    sprintf(&quot;%d of %.0f (%.0f%%)&quot;, sum(gulf$n_meas, na.rm = TRUE), sum(gulf$n_total),
-            100 * sum(gulf$n_meas, na.rm = TRUE) / sum(gulf$n_total)))</code></pre>
-<pre><code>[FLAG] measurement coverage                                 984 of 1499 (66%)</code></pre>
-<pre class="r"><code>big &lt;- gulf %&gt;% filter(n_total &gt; 10)
-say(NA, &quot;large tows with under half measured&quot;,
-    sprintf(&quot;%d of %d tows holding &gt;10 larvae&quot;,
-            sum(big$n_meas / big$n_total &lt; 0.5, na.rm = TRUE), nrow(big)))</code></pre>
-<pre><code>[FLAG] large tows with under half measured                  11 of 21 tows holding &gt;10 larvae</code></pre>
-<pre class="r"><code>say(all(lengths$length_mm &gt; 1 &amp; lengths$length_mm &lt; 70), &quot;lengths plausible&quot;,
-    sprintf(&quot;%.1f to %.1f mm&quot;, min(lengths$length_mm), max(lengths$length_mm)))</code></pre>
-<pre><code>[PASS] lengths plausible                                    1.4 to 66.0 mm</code></pre>
-<pre class="r"><code>say(all(gulf$n_meas &lt;= gulf$n_total, na.rm = TRUE), &quot;measured never exceeds counted&quot;)</code></pre>
-<pre><code>[PASS] measured never exceeds counted                       </code></pre>
-<pre class="r"><code>say(all(gulf$n_small + gulf$n_mid + gulf$n_big == gulf$n_meas, na.rm = TRUE),
-    &quot;size-class counts sum to the measured total&quot;)</code></pre>
-<pre><code>[PASS] size-class counts sum to the measured total          </code></pre>
-<pre class="r"><code>cat(&quot;\n-- depth --\n&quot;)</code></pre>
-<pre><code>
--- depth --</code></pre>
-<pre class="r"><code>chk_d &lt;- gulf %&gt;% filter(sta_depth_m &gt; 0)
-chk_d$etopo &lt;- -terra::extract(rast(as.xyz(b), type = &quot;xyz&quot;, crs = &quot;EPSG:4326&quot;),
-                               as.matrix(chk_d[, c(&quot;lon&quot;, &quot;lat&quot;)]))[, 1]
-chk_d &lt;- filter(chk_d, etopo &gt; 0)
-rr &lt;- cor(log10(chk_d$sta_depth_m), log10(chk_d$etopo))
-say(rr &gt; 0.9, &quot;recorded depth agrees with ETOPO&quot;,
-    sprintf(&quot;r = %.3f on log depth, n = %d&quot;, rr, nrow(chk_d)))</code></pre>
-<pre><code>[PASS] recorded depth agrees with ETOPO                     r = 0.998 on log depth, n = 547</code></pre>
-<pre class="r"><code>cat(&quot;\n-- confounding --\n&quot;)</code></pre>
-<pre><code>
--- confounding --</code></pre>
-<pre class="r"><code>say(min(tx$rate[tx$month %in% PEAK]) &gt; 2 * tx$rate[tx$month == 9],
-    &quot;June-July peak survives on one fixed area&quot;,
-    sprintf(&quot;Jun %.1f, Jul %.1f, Sep %.1f&quot;, tx$rate[tx$month == 6], tx$rate[tx$month == 7],
-            tx$rate[tx$month == 9]))</code></pre>
-<pre><code>[PASS] June-July peak survives on one fixed area            Jun 32.2, Jul 18.8, Sep 7.9</code></pre>
-<pre class="r"><code>tod_e &lt;- effort %&gt;% filter(!is.na(night), sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M,
-                             year %in% SERIES) %&gt;% count(month, night, name = &quot;tows&quot;)
-tod &lt;- rates %&gt;% filter(!is.na(night), sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M,
-                          year %in% SERIES) %&gt;%
-  count(month, night, wt = n_total, name = &quot;larvae&quot;) %&gt;%
-  right_join(tod_e, by = c(&quot;month&quot;, &quot;night&quot;)) %&gt;%
+tibble(quantity    = c(&quot;records&quot;, &quot;larvae after aliquot correction&quot;, &quot;sub-sampled records&quot;),
+       from_raw    = c(nrow(raw), sum(raw$n), sum(raw$ALIQUOT != &quot;1/1&quot;)),
+       in_pipeline = c(nrow(records), sum(records$n_total), sum(records$aliquot != &quot;1/1&quot;))) %&gt;%
+  mutate(agree = from_raw == in_pipeline)</code></pre>
+<div class="kable-table">
+<table>
+<thead>
+<tr class="header">
+<th align="left">quantity</th>
+<th align="right">from_raw</th>
+<th align="right">in_pipeline</th>
+<th align="left">agree</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">records</td>
+<td align="right">549</td>
+<td align="right">549</td>
+<td align="left">TRUE</td>
+</tr>
+<tr class="even">
+<td align="left">larvae after aliquot correction</td>
+<td align="right">1501</td>
+<td align="right">1501</td>
+<td align="left">TRUE</td>
+</tr>
+<tr class="odd">
+<td align="left">sub-sampled records</td>
+<td align="right">12</td>
+<td align="right">12</td>
+<td align="left">TRUE</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>An unanchored taxon match would also catch <em>Poromitra
+megalops</em>, a melamphaid sharing the species epithet. These two lists
+should be identical.</p>
+<pre class="r"><code>tibble(anchored   = paste(sort(unique(raw$TAXON)), collapse = &quot;; &quot;),
+       unanchored = isarwk %&gt;% filter(str_detect(toupper(TAXON), &quot;RACHYCENTR&quot;)) %&gt;%
+                      pull(TAXON) %&gt;% unique() %&gt;% sort() %&gt;% paste(collapse = &quot;; &quot;))</code></pre>
+<div class="kable-table">
+<table>
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">anchored</th>
+<th align="left">unanchored</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">RACHYCENTRIDAE; RACHYCENTRON; RACHYCENTRON CANADUM</td>
+<td align="left">RACHYCENTRIDAE; RACHYCENTRON; RACHYCENTRON CANADUM</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="station-join" class="section level2">
+<h2>Station join</h2>
+<p>Every record should carry a station, and positions and dates should
+be possible.</p>
+<pre class="r"><code>tibble(quantity = c(&quot;records without a station&quot;, &quot;latitude range&quot;, &quot;longitude range&quot;,
+                    &quot;date range&quot;, &quot;duplicated catalogue keys&quot;, &quot;records outside the study box&quot;),
+       value = c(as.character(sum(is.na(records$lat))),
+                 sprintf(&quot;%.1f to %.1f N&quot;, min(records$lat), max(records$lat)),
+                 sprintf(&quot;%.1f to %.1f&quot;, min(records$lon), max(records$lon)),
+                 sprintf(&quot;%s to %s&quot;, min(records$date), max(records$date)),
+                 as.character(sum(duplicated(records$v_c_p_s_cat))),
+                 as.character(nrow(records) - nrow(gulf))))</code></pre>
+<div class="kable-table">
+<table>
+<thead>
+<tr class="header">
+<th align="left">quantity</th>
+<th align="left">value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">records without a station</td>
+<td align="left">0</td>
+</tr>
+<tr class="even">
+<td align="left">latitude range</td>
+<td align="left">23.7 to 35.5 N</td>
+</tr>
+<tr class="odd">
+<td align="left">longitude range</td>
+<td align="left">-97.0 to -74.7</td>
+</tr>
+<tr class="even">
+<td align="left">date range</td>
+<td align="left">1982-06-23 to 2024-09-05</td>
+</tr>
+<tr class="odd">
+<td align="left">duplicated catalogue keys</td>
+<td align="left">0</td>
+</tr>
+<tr class="even">
+<td align="left">records outside the study box</td>
+<td align="left">2</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="the-numerator-belongs-to-the-same-pool-as-the-denominator" class="section level2">
+<h2>The numerator belongs to the same pool as the denominator</h2>
+<p>Effort is sorted bongo and neuston deployments, so a larva taken any
+other way has no matching denominator. These are the records held out of
+every rate.</p>
+<pre class="r"><code>gulf %&gt;%
+  mutate(why = case_when(!gear %in% c(&quot;Bongo&quot;, &quot;Neuston&quot;) ~ paste(&quot;gear:&quot;, gear),
+                         !sort_ist %in% SORTED            ~ &quot;not flagged sorted&quot;,
+                         TRUE                             ~ &quot;in the rates&quot;)) %&gt;%
+  count(why, wt = n_total, name = &quot;larvae&quot;)</code></pre>
+<div class="kable-table">
+<table>
+<thead>
+<tr class="header">
+<th align="left">why</th>
+<th align="right">larvae</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">gear: MOCNESS</td>
+<td align="right">23</td>
+</tr>
+<tr class="even">
+<td align="left">in the rates</td>
+<td align="right">1473</td>
+</tr>
+<tr class="odd">
+<td align="left">not flagged sorted</td>
+<td align="right">3</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Recomputing the monthly numerator from scratch, with all four filters
+applied, should land on the number the rates were built from.</p>
+<pre class="r"><code>tibble(source = c(&quot;rebuilt here&quot;, &quot;used in the monthly rates&quot;),
+       larvae = c(gulf %&gt;% filter(gear %in% c(&quot;Bongo&quot;, &quot;Neuston&quot;), sort_ist %in% SORTED,
+                                  sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M,
+                                  year %in% SERIES) %&gt;% pull(n_total) %&gt;% sum(),
+                  sum(cpue$n_larvae)))</code></pre>
+<div class="kable-table">
+<table>
+<thead>
+<tr class="header">
+<th align="left">source</th>
+<th align="right">larvae</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">rebuilt here</td>
+<td align="right">1262</td>
+</tr>
+<tr class="even">
+<td align="left">used in the monthly rates</td>
+<td align="right">1262</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="lengths" class="section level2">
+<h2>Lengths</h2>
+<p>Coverage is uneven and worst in the largest tows, which is where a
+size class rests on fewest measurements.</p>
+<pre class="r"><code>tibble(quantity = c(&quot;larvae measured&quot;, &quot;larvae counted&quot;, &quot;coverage&quot;,
+                    &quot;tows holding &gt;10 larvae&quot;, &quot;of those, under half measured&quot;,
+                    &quot;length range&quot;, &quot;measured exceeds counted&quot;,
+                    &quot;size classes do not sum to measured&quot;),
+       value = c(sum(gulf$n_meas, na.rm = TRUE), sum(gulf$n_total),
+                 sprintf(&quot;%.0f%%&quot;, 100 * sum(gulf$n_meas, na.rm = TRUE) / sum(gulf$n_total)),
+                 sum(gulf$n_total &gt; 10),
+                 sum(gulf$n_total &gt; 10 &amp; gulf$n_meas / gulf$n_total &lt; 0.5, na.rm = TRUE),
+                 sprintf(&quot;%.1f to %.1f mm&quot;, min(lengths$length_mm), max(lengths$length_mm)),
+                 sum(gulf$n_meas &gt; gulf$n_total, na.rm = TRUE),
+                 sum(gulf$n_small + gulf$n_mid + gulf$n_big != gulf$n_meas, na.rm = TRUE)) %&gt;%
+         as.character())</code></pre>
+<div class="kable-table">
+<table>
+<thead>
+<tr class="header">
+<th align="left">quantity</th>
+<th align="left">value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">larvae measured</td>
+<td align="left">984</td>
+</tr>
+<tr class="even">
+<td align="left">larvae counted</td>
+<td align="left">1499</td>
+</tr>
+<tr class="odd">
+<td align="left">coverage</td>
+<td align="left">66%</td>
+</tr>
+<tr class="even">
+<td align="left">tows holding &gt;10 larvae</td>
+<td align="left">21</td>
+</tr>
+<tr class="odd">
+<td align="left">of those, under half measured</td>
+<td align="left">11</td>
+</tr>
+<tr class="even">
+<td align="left">length range</td>
+<td align="left">1.4 to 66.0 mm</td>
+</tr>
+<tr class="odd">
+<td align="left">measured exceeds counted</td>
+<td align="left">0</td>
+</tr>
+<tr class="even">
+<td align="left">size classes do not sum to measured</td>
+<td align="left">0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="depth" class="section level2">
+<h2>Depth</h2>
+<p>Station depth is recorded in fathoms and converted. An independent
+bathymetry gives a check on whether the conversion is right: agreement
+should be near-perfect, and a missed conversion would show as a constant
+offset on the log scale.</p>
+<pre class="r"><code>chk &lt;- gulf %&gt;% filter(sta_depth_m &gt; 0)
+chk$etopo_m &lt;- -terra::extract(rast(as.xyz(b), type = &quot;xyz&quot;, crs = &quot;EPSG:4326&quot;),
+                               as.matrix(chk[, c(&quot;lon&quot;, &quot;lat&quot;)]))[, 1]
+chk &lt;- filter(chk, etopo_m &gt; 0)
+tibble(stations = nrow(chk),
+       correlation_log_depth = round(cor(log10(chk$sta_depth_m), log10(chk$etopo_m)), 3),
+       median_ratio = round(median(chk$sta_depth_m / chk$etopo_m), 2),
+       disagree_over_fourfold = sum(chk$sta_depth_m / chk$etopo_m &gt; 4 |
+                                    chk$sta_depth_m / chk$etopo_m &lt; 0.25))</code></pre>
+<div class="kable-table">
+<table>
+<thead>
+<tr class="header">
+<th align="right">stations</th>
+<th align="right">correlation_log_depth</th>
+<th align="right">median_ratio</th>
+<th align="right">disagree_over_fourfold</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">547</td>
+<td align="right">0.998</td>
+<td align="right">0.98</td>
+<td align="right">0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="does-the-seasonal-peak-survive-the-controls" class="section level2">
+<h2>Does the seasonal peak survive the controls?</h2>
+<p>The survey does not sample the same places, or at the same hours, in
+every month. If the June and July peak were an artefact of either, it
+should weaken when the area is held fixed or when day and night tows are
+separated. It does neither.</p>
+<pre class="r"><code>tod &lt;- effort %&gt;% filter(!is.na(night), sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M,
+                         year %in% SERIES) %&gt;%
+  count(month, night, name = &quot;tows&quot;) %&gt;%
+  left_join(rates %&gt;% filter(!is.na(night), sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M,
+                             year %in% SERIES) %&gt;%
+              count(month, night, wt = n_total, name = &quot;larvae&quot;), by = c(&quot;month&quot;, &quot;night&quot;)) %&gt;%
   mutate(rate = 100 * coalesce(larvae, 0) / tows)
-pk_d &lt;- max(tod$rate[tod$month %in% PEAK &amp; !tod$night]); sp_d &lt;- tod$rate[tod$month == 9 &amp; !tod$night]
-pk_n &lt;- max(tod$rate[tod$month %in% PEAK &amp; tod$night]);  sp_n &lt;- tod$rate[tod$month == 9 &amp; tod$night]
-say(pk_d &gt; 3 * sp_d &amp;&amp; pk_n &gt; 3 * sp_n, &quot;peak present in day and night tows separately&quot;,
-    sprintf(&quot;day %.1f vs %.1f; night %.1f vs %.1f&quot;, pk_d, sp_d, pk_n, sp_n))</code></pre>
-<pre><code>[PASS] peak present in day and night tows separately        day 27.8 vs 2.7; night 31.7 vs 6.6</code></pre>
-<pre class="r"><code>say(nrow(reg) == 2 &amp;&amp; all(reg$tows &gt; 300), &quot;regional comparison season-matched, both sides sampled&quot;,
-    paste(sprintf(&quot;%s %.1f/100 on %d tows&quot;, str_remove(reg$region, &quot; shelf&quot;), reg$rate, reg$tows),
-          collapse = &quot;; &quot;))</code></pre>
-<pre><code>[PASS] regional comparison season-matched, both sides sampled Texas-Louisiana 25.8/100 on 3388 tows; West Florida 4.1/100 on 754 tows</code></pre>
-<pre class="r"><code>wf &lt;- effort %&gt;% filter(!is.na(region), sta_depth_m &lt;= SHELF_M) %&gt;%
-  group_by(region) %&gt;% summarise(pct = 100 * mean(month %in% PEAK), .groups = &quot;drop&quot;)
-say(NA, &quot;share of shelf tows taken in June-July&quot;,
-    paste(sprintf(&quot;%s %.0f%%&quot;, str_remove(wf$region, &quot; shelf&quot;), wf$pct), collapse = &quot;; &quot;))</code></pre>
-<pre><code>[FLAG] share of shelf tows taken in June-July               Texas-Louisiana 27%; West Florida 12%</code></pre>
-<pre class="r"><code>say(NA, &quot;daytime rate across the 1995 protocol change&quot;,
-    sprintf(&quot;day x%.0f, night x%.1f; no trend fitted&quot;,
-            era$per_100[era$era == &quot;1995-2016&quot; &amp; !era$night] /
-              era$per_100[era$era == &quot;1982-1994&quot; &amp; !era$night],
-            era$per_100[era$era == &quot;1995-2016&quot; &amp; era$night] /
-              era$per_100[era$era == &quot;1982-1994&quot; &amp; era$night]))</code></pre>
-<pre><code>[FLAG] daytime rate across the 1995 protocol change         day x29, night x1.6; no trend fitted</code></pre>
-<pre class="r"><code>cat(&quot;\n&quot;)</code></pre>
-<pre class="r"><code>if (length(fails)) { cat(&quot;FAILED:\n&quot;); for (f in fails) cat(&quot; -&quot;, f, &quot;\n&quot;) } else
-  cat(&quot;All hard checks passed. FLAG lines are limitations, not errors.\n&quot;)</code></pre>
-<pre><code>All hard checks passed. FLAG lines are limitations, not errors.</code></pre>
+
+tibble(control = c(&quot;all Gulf shelf, pooled&quot;, &quot;Texas-Louisiana shelf only&quot;,
+                   &quot;day tows only&quot;, &quot;night tows only&quot;),
+       june_july = c(max(cpue$per_100[cpue$month %in% PEAK]),
+                     max(tx$rate[tx$month %in% PEAK]),
+                     max(tod$rate[tod$month %in% PEAK &amp; !tod$night]),
+                     max(tod$rate[tod$month %in% PEAK &amp; tod$night])),
+       september = c(cpue$per_100[cpue$month == 9], tx$rate[tx$month == 9],
+                     tod$rate[tod$month == 9 &amp; !tod$night],
+                     tod$rate[tod$month == 9 &amp; tod$night])) %&gt;%
+  mutate(across(june_july:september, ~ round(.x, 1)), ratio = round(june_july / september, 1))</code></pre>
+<div class="kable-table">
+<table>
+<thead>
+<tr class="header">
+<th align="left">control</th>
+<th align="right">june_july</th>
+<th align="right">september</th>
+<th align="right">ratio</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">all Gulf shelf, pooled</td>
+<td align="right">26.4</td>
+<td align="right">4.2</td>
+<td align="right">6.3</td>
+</tr>
+<tr class="even">
+<td align="left">Texas-Louisiana shelf only</td>
+<td align="right">32.2</td>
+<td align="right">7.9</td>
+<td align="right">4.1</td>
+</tr>
+<tr class="odd">
+<td align="left">day tows only</td>
+<td align="right">27.8</td>
+<td align="right">2.7</td>
+<td align="right">10.3</td>
+</tr>
+<tr class="even">
+<td align="left">night tows only</td>
+<td align="right">31.7</td>
+<td align="right">6.6</td>
+<td align="right">4.8</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="does-the-shelf-difference-survive-them" class="section level2">
+<h2>Does the shelf difference survive them?</h2>
+<p>West Florida takes a far smaller share of its tows in the spawning
+months, which is what made an all-month comparison misleading. Within
+June and July the two regions are comparable on depth, gear and years
+sampled, so the difference is not a by-product of what was sampled.</p>
+<pre class="r"><code>effort %&gt;% filter(!is.na(region), sta_depth_m &lt;= SHELF_M) %&gt;%
+  group_by(region) %&gt;%
+  summarise(shelf_tows = n(), pct_in_june_july = round(100 * mean(month %in% PEAK)),
+            .groups = &quot;drop&quot;) %&gt;%
+  left_join(effort %&gt;% filter(!is.na(region), month %in% PEAK, year %in% SERIES) %&gt;%
+              group_by(region) %&gt;%
+              summarise(years = n_distinct(year), depth_median = round(median(sta_depth_m)),
+                        pct_bongo = round(100 * mean(gear == &quot;Bongo&quot;)), .groups = &quot;drop&quot;),
+            by = &quot;region&quot;) %&gt;%
+  left_join(reg %&gt;% select(region, rate, lo, hi) %&gt;%
+              mutate(across(rate:hi, ~ round(.x, 1))), by = &quot;region&quot;)</code></pre>
+<div class="kable-table">
+<table>
+<colgroup>
+<col width="23%" />
+<col width="11%" />
+<col width="18%" />
+<col width="6%" />
+<col width="13%" />
+<col width="10%" />
+<col width="5%" />
+<col width="5%" />
+<col width="5%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">region</th>
+<th align="right">shelf_tows</th>
+<th align="right">pct_in_june_july</th>
+<th align="right">years</th>
+<th align="right">depth_median</th>
+<th align="right">pct_bongo</th>
+<th align="right">rate</th>
+<th align="right">lo</th>
+<th align="right">hi</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Texas-Louisiana shelf</td>
+<td align="right">12742</td>
+<td align="right">27</td>
+<td align="right">35</td>
+<td align="right">29</td>
+<td align="right">53</td>
+<td align="right">25.8</td>
+<td align="right">15.7</td>
+<td align="right">42.9</td>
+</tr>
+<tr class="even">
+<td align="left">West Florida shelf</td>
+<td align="right">6128</td>
+<td align="right">12</td>
+<td align="right">27</td>
+<td align="right">37</td>
+<td align="right">52</td>
+<td align="right">4.1</td>
+<td align="right">1.2</td>
+<td align="right">8.9</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="why-no-interannual-trend-is-fitted" class="section level2">
+<h2>Why no interannual trend is fitted</h2>
+<p>Catch rates rise roughly tenfold between the 1980s and the 2010s.
+Daytime sampling on the early trawl surveys was a known bias, addressed
+in the mid 1990s. If the rise were real, day and night rates should move
+together across that break. The day rate moves roughly thirtyfold and
+the night rate hardly at all, so the rise tracks the sampling.</p>
+<pre class="r"><code>era %&gt;% select(era, night, tows, larvae, per_100) %&gt;%
+  pivot_wider(names_from = era, values_from = c(tows, larvae, per_100)) %&gt;%
+  mutate(fold_change = round(`per_100_1995-2016` / `per_100_1982-1994`, 1))</code></pre>
+<div class="kable-table">
+<table>
+<colgroup>
+<col width="5%" />
+<col width="12%" />
+<col width="12%" />
+<col width="14%" />
+<col width="14%" />
+<col width="15%" />
+<col width="15%" />
+<col width="10%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">night</th>
+<th align="right">tows_1982-1994</th>
+<th align="right">tows_1995-2016</th>
+<th align="right">larvae_1982-1994</th>
+<th align="right">larvae_1995-2016</th>
+<th align="right">per_100_1982-1994</th>
+<th align="right">per_100_1995-2016</th>
+<th align="right">fold_change</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">FALSE</td>
+<td align="right">1342</td>
+<td align="right">1640</td>
+<td align="right">16</td>
+<td align="right">563</td>
+<td align="right">1.2</td>
+<td align="right">34.3</td>
+<td align="right">28.6</td>
+</tr>
+<tr class="even">
+<td align="left">TRUE</td>
+<td align="right">302</td>
+<td align="right">914</td>
+<td align="right">55</td>
+<td align="right">272</td>
+<td align="right">18.2</td>
+<td align="right">29.8</td>
+<td align="right">1.6</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="june-and-july-sampling-ends-in-2016" class="section level2">
+<h2>June and July sampling ends in 2016</h2>
+<p>The records run to 2024, but plankton sampling on the summer trawl
+survey stopped after 2016. Any monthly comparison that ignores this sets
+June and July over one span of years against September over another.</p>
+<pre class="r"><code>effort %&gt;% filter(month %in% PEAK, sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M) %&gt;%
+  count(year, name = &quot;june_july_shelf_tows&quot;) %&gt;%
+  filter(year &gt;= 2013) %&gt;%
+  full_join(tibble(year = 2013:max(gulf$year)), by = &quot;year&quot;) %&gt;%
+  arrange(year) %&gt;%
+  mutate(june_july_shelf_tows = coalesce(june_july_shelf_tows, 0L))</code></pre>
+<div class="kable-table">
+<table>
+<thead>
+<tr class="header">
+<th align="right">year</th>
+<th align="right">june_july_shelf_tows</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">2013</td>
+<td align="right">203</td>
+</tr>
+<tr class="even">
+<td align="right">2014</td>
+<td align="right">260</td>
+</tr>
+<tr class="odd">
+<td align="right">2015</td>
+<td align="right">201</td>
+</tr>
+<tr class="even">
+<td align="right">2016</td>
+<td align="right">127</td>
+</tr>
+<tr class="odd">
+<td align="right">2017</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="right">2018</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="right">2019</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="right">2020</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="right">2021</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="right">2022</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="right">2023</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="right">2024</td>
+<td align="right">0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 </div>
 
 

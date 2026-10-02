@@ -369,110 +369,186 @@ era
 
 # Checks
 
-Each line reports PASS, FAIL or FLAG with the numbers behind it. FLAG marks a limitation worth
-knowing rather than an error.
+Each block states what should be true, computes it, and shows both sides so the comparison is
+visible rather than reduced to a pass or fail.
 
-```{r checks}
-fails <- character()
-say <- function(ok, label, detail = "") {
-  tag <- if (is.na(ok)) "FLAG" else if (ok) "PASS" else "FAIL"
-  if (!is.na(ok) && !ok) fails <<- c(fails, label)
-  cat(sprintf("[%s] %-52s %s\n", tag, label, detail))
-}
+## Extraction reproduces from the raw table
+
+Counts taken straight from `ISARWK` should equal what the pipeline carried forward.
+
+```{r check-extraction}
 isarwk <- read_csv("data/raw/seamap/ISARWK.csv", col_types = cols(.default = col_character()),
                    show_col_types = FALSE, name_repair = "minimal") %>%
   rename_with(~ str_remove(.x, "^\ufeff"))
 ALIQ_MULT <- c("1/1" = 1, "1/2" = 2, "1/4" = 4, "1/8" = 8)
+
 raw <- isarwk %>% filter(str_detect(toupper(TAXON), "^RACHYCENTR")) %>%
   mutate(n = (coalesce(as.numeric(MEAS), 0) + coalesce(as.numeric(NOT_MEAS), 0)) *
              coalesce(ALIQ_MULT[ALIQUOT], 1))
 
-cat("-- extraction --\n")
-say(nrow(isarwk %>% filter(str_detect(toupper(TAXON), "RACHYCENTR")) %>% distinct(TAXON)) ==
-    nrow(distinct(raw, TAXON)), "taxon filter admits no partial-name matches",
-    paste(sort(unique(raw$TAXON)), collapse = "; "))
-say(nrow(raw) == nrow(records), "record count matches the raw table", nrow(records))
-say(abs(sum(raw$n) - sum(records$n_total)) < 1e-6, "aliquot-corrected larva count matches",
-    sprintf("%.0f larvae, %d sub-sampled", sum(records$n_total), sum(records$aliquot != "1/1")))
-say(all(raw$ALIQUOT %in% names(ALIQ_MULT)), "every aliquot value is recognised")
-say(!any(duplicated(records$v_c_p_s_cat)), "catalogue keys are unique")
+tibble(quantity    = c("records", "larvae after aliquot correction", "sub-sampled records"),
+       from_raw    = c(nrow(raw), sum(raw$n), sum(raw$ALIQUOT != "1/1")),
+       in_pipeline = c(nrow(records), sum(records$n_total), sum(records$aliquot != "1/1"))) %>%
+  mutate(agree = from_raw == in_pipeline)
+```
 
-cat("\n-- station join --\n")
-say(all(!is.na(records$lat)), "every record joined to a station")
-say(all(records$lat > 17 & records$lat < 40), "latitudes plausible",
-    sprintf("%.1f to %.1f N", min(records$lat), max(records$lat)))
-say(all(records$date <= Sys.Date()), "dates in range",
-    sprintf("%s to %s", min(records$date), max(records$date)))
-say(NA, "records outside the study box", nrow(records) - nrow(gulf))
+An unanchored taxon match would also catch *Poromitra megalops*, a melamphaid sharing the species
+epithet. These two lists should be identical.
 
-cat("\n-- numerator against denominator --\n")
-off <- gulf %>% filter(!gear %in% c("Bongo", "Neuston")) %>% count(gear, wt = n_total)
-say(NA, "cobia taken by gear outside the effort pool",
-    if (nrow(off) == 0) "none" else sprintf("%.0f larvae in %s; out of rates", sum(off$n), off$gear))
-say(NA, "cobia tows not flagged sorted", sum(!gulf$sort_ist %in% SORTED))
-chk <- gulf %>% filter(gear %in% c("Bongo", "Neuston"), sort_ist %in% SORTED,
-                         sta_depth_m > 0, sta_depth_m <= SHELF_M, year %in% SERIES)
-say(abs(sum(cpue$n_larvae) - sum(chk$n_total)) < 1e-6,
-    "rate numerator reproduces under all four filters",
-    sprintf("%.0f in the rates, %.0f in the box", sum(cpue$n_larvae), sum(gulf$n_total)))
-say(max(effort$year[effort$month %in% PEAK & effort$sta_depth_m <= SHELF_M]) <= 2016,
-    "June-July shelf series ends before the records do",
-    sprintf("records to %d", max(gulf$year)))
+```{r check-taxon}
+tibble(anchored   = paste(sort(unique(raw$TAXON)), collapse = "; "),
+       unanchored = isarwk %>% filter(str_detect(toupper(TAXON), "RACHYCENTR")) %>%
+                      pull(TAXON) %>% unique() %>% sort() %>% paste(collapse = "; "))
+```
 
-cat("\n-- lengths --\n")
-say(NA, "measurement coverage",
-    sprintf("%d of %.0f (%.0f%%)", sum(gulf$n_meas, na.rm = TRUE), sum(gulf$n_total),
-            100 * sum(gulf$n_meas, na.rm = TRUE) / sum(gulf$n_total)))
-big <- gulf %>% filter(n_total > 10)
-say(NA, "large tows with under half measured",
-    sprintf("%d of %d tows holding >10 larvae",
-            sum(big$n_meas / big$n_total < 0.5, na.rm = TRUE), nrow(big)))
-say(all(lengths$length_mm > 1 & lengths$length_mm < 70), "lengths plausible",
-    sprintf("%.1f to %.1f mm", min(lengths$length_mm), max(lengths$length_mm)))
-say(all(gulf$n_meas <= gulf$n_total, na.rm = TRUE), "measured never exceeds counted")
-say(all(gulf$n_small + gulf$n_mid + gulf$n_big == gulf$n_meas, na.rm = TRUE),
-    "size-class counts sum to the measured total")
+## Station join
 
-cat("\n-- depth --\n")
-chk_d <- gulf %>% filter(sta_depth_m > 0)
-chk_d$etopo <- -terra::extract(rast(as.xyz(b), type = "xyz", crs = "EPSG:4326"),
-                               as.matrix(chk_d[, c("lon", "lat")]))[, 1]
-chk_d <- filter(chk_d, etopo > 0)
-rr <- cor(log10(chk_d$sta_depth_m), log10(chk_d$etopo))
-say(rr > 0.9, "recorded depth agrees with ETOPO",
-    sprintf("r = %.3f on log depth, n = %d", rr, nrow(chk_d)))
+Every record should carry a station, and positions and dates should be possible.
 
-cat("\n-- confounding --\n")
-say(min(tx$rate[tx$month %in% PEAK]) > 2 * tx$rate[tx$month == 9],
-    "June-July peak survives on one fixed area",
-    sprintf("Jun %.1f, Jul %.1f, Sep %.1f", tx$rate[tx$month == 6], tx$rate[tx$month == 7],
-            tx$rate[tx$month == 9]))
-tod_e <- effort %>% filter(!is.na(night), sta_depth_m > 0, sta_depth_m <= SHELF_M,
-                             year %in% SERIES) %>% count(month, night, name = "tows")
-tod <- rates %>% filter(!is.na(night), sta_depth_m > 0, sta_depth_m <= SHELF_M,
-                          year %in% SERIES) %>%
-  count(month, night, wt = n_total, name = "larvae") %>%
-  right_join(tod_e, by = c("month", "night")) %>%
+```{r check-join}
+tibble(quantity = c("records without a station", "latitude range", "longitude range",
+                    "date range", "duplicated catalogue keys", "records outside the study box"),
+       value = c(as.character(sum(is.na(records$lat))),
+                 sprintf("%.1f to %.1f N", min(records$lat), max(records$lat)),
+                 sprintf("%.1f to %.1f", min(records$lon), max(records$lon)),
+                 sprintf("%s to %s", min(records$date), max(records$date)),
+                 as.character(sum(duplicated(records$v_c_p_s_cat))),
+                 as.character(nrow(records) - nrow(gulf))))
+```
+
+## The numerator belongs to the same pool as the denominator
+
+Effort is sorted bongo and neuston deployments, so a larva taken any other way has no matching
+denominator. These are the records held out of every rate.
+
+```{r check-excluded}
+gulf %>%
+  mutate(why = case_when(!gear %in% c("Bongo", "Neuston") ~ paste("gear:", gear),
+                         !sort_ist %in% SORTED            ~ "not flagged sorted",
+                         TRUE                             ~ "in the rates")) %>%
+  count(why, wt = n_total, name = "larvae")
+```
+
+Recomputing the monthly numerator from scratch, with all four filters applied, should land on the
+number the rates were built from.
+
+```{r check-numerator}
+tibble(source = c("rebuilt here", "used in the monthly rates"),
+       larvae = c(gulf %>% filter(gear %in% c("Bongo", "Neuston"), sort_ist %in% SORTED,
+                                  sta_depth_m > 0, sta_depth_m <= SHELF_M,
+                                  year %in% SERIES) %>% pull(n_total) %>% sum(),
+                  sum(cpue$n_larvae)))
+```
+
+## Lengths
+
+Coverage is uneven and worst in the largest tows, which is where a size class rests on fewest
+measurements.
+
+```{r check-lengths}
+tibble(quantity = c("larvae measured", "larvae counted", "coverage",
+                    "tows holding >10 larvae", "of those, under half measured",
+                    "length range", "measured exceeds counted",
+                    "size classes do not sum to measured"),
+       value = c(sum(gulf$n_meas, na.rm = TRUE), sum(gulf$n_total),
+                 sprintf("%.0f%%", 100 * sum(gulf$n_meas, na.rm = TRUE) / sum(gulf$n_total)),
+                 sum(gulf$n_total > 10),
+                 sum(gulf$n_total > 10 & gulf$n_meas / gulf$n_total < 0.5, na.rm = TRUE),
+                 sprintf("%.1f to %.1f mm", min(lengths$length_mm), max(lengths$length_mm)),
+                 sum(gulf$n_meas > gulf$n_total, na.rm = TRUE),
+                 sum(gulf$n_small + gulf$n_mid + gulf$n_big != gulf$n_meas, na.rm = TRUE)) %>%
+         as.character())
+```
+
+## Depth
+
+Station depth is recorded in fathoms and converted. An independent bathymetry gives a check on
+whether the conversion is right: agreement should be near-perfect, and a missed conversion would
+show as a constant offset on the log scale.
+
+```{r check-depth}
+chk <- gulf %>% filter(sta_depth_m > 0)
+chk$etopo_m <- -terra::extract(rast(as.xyz(b), type = "xyz", crs = "EPSG:4326"),
+                               as.matrix(chk[, c("lon", "lat")]))[, 1]
+chk <- filter(chk, etopo_m > 0)
+tibble(stations = nrow(chk),
+       correlation_log_depth = round(cor(log10(chk$sta_depth_m), log10(chk$etopo_m)), 3),
+       median_ratio = round(median(chk$sta_depth_m / chk$etopo_m), 2),
+       disagree_over_fourfold = sum(chk$sta_depth_m / chk$etopo_m > 4 |
+                                    chk$sta_depth_m / chk$etopo_m < 0.25))
+```
+
+## Does the seasonal peak survive the controls?
+
+The survey does not sample the same places, or at the same hours, in every month. If the June and
+July peak were an artefact of either, it should weaken when the area is held fixed or when day and
+night tows are separated. It does neither.
+
+```{r check-season-controls}
+tod <- effort %>% filter(!is.na(night), sta_depth_m > 0, sta_depth_m <= SHELF_M,
+                         year %in% SERIES) %>%
+  count(month, night, name = "tows") %>%
+  left_join(rates %>% filter(!is.na(night), sta_depth_m > 0, sta_depth_m <= SHELF_M,
+                             year %in% SERIES) %>%
+              count(month, night, wt = n_total, name = "larvae"), by = c("month", "night")) %>%
   mutate(rate = 100 * coalesce(larvae, 0) / tows)
-pk_d <- max(tod$rate[tod$month %in% PEAK & !tod$night]); sp_d <- tod$rate[tod$month == 9 & !tod$night]
-pk_n <- max(tod$rate[tod$month %in% PEAK & tod$night]);  sp_n <- tod$rate[tod$month == 9 & tod$night]
-say(pk_d > 3 * sp_d && pk_n > 3 * sp_n, "peak present in day and night tows separately",
-    sprintf("day %.1f vs %.1f; night %.1f vs %.1f", pk_d, sp_d, pk_n, sp_n))
-say(nrow(reg) == 2 && all(reg$tows > 300), "regional comparison season-matched, both sides sampled",
-    paste(sprintf("%s %.1f/100 on %d tows", str_remove(reg$region, " shelf"), reg$rate, reg$tows),
-          collapse = "; "))
-wf <- effort %>% filter(!is.na(region), sta_depth_m <= SHELF_M) %>%
-  group_by(region) %>% summarise(pct = 100 * mean(month %in% PEAK), .groups = "drop")
-say(NA, "share of shelf tows taken in June-July",
-    paste(sprintf("%s %.0f%%", str_remove(wf$region, " shelf"), wf$pct), collapse = "; "))
-say(NA, "daytime rate across the 1995 protocol change",
-    sprintf("day x%.0f, night x%.1f; no trend fitted",
-            era$per_100[era$era == "1995-2016" & !era$night] /
-              era$per_100[era$era == "1982-1994" & !era$night],
-            era$per_100[era$era == "1995-2016" & era$night] /
-              era$per_100[era$era == "1982-1994" & era$night]))
 
-cat("\n")
-if (length(fails)) { cat("FAILED:\n"); for (f in fails) cat(" -", f, "\n") } else
-  cat("All hard checks passed. FLAG lines are limitations, not errors.\n")
+tibble(control = c("all Gulf shelf, pooled", "Texas-Louisiana shelf only",
+                   "day tows only", "night tows only"),
+       june_july = c(max(cpue$per_100[cpue$month %in% PEAK]),
+                     max(tx$rate[tx$month %in% PEAK]),
+                     max(tod$rate[tod$month %in% PEAK & !tod$night]),
+                     max(tod$rate[tod$month %in% PEAK & tod$night])),
+       september = c(cpue$per_100[cpue$month == 9], tx$rate[tx$month == 9],
+                     tod$rate[tod$month == 9 & !tod$night],
+                     tod$rate[tod$month == 9 & tod$night])) %>%
+  mutate(across(june_july:september, ~ round(.x, 1)), ratio = round(june_july / september, 1))
+```
+
+## Does the shelf difference survive them?
+
+West Florida takes a far smaller share of its tows in the spawning months, which is what made an
+all-month comparison misleading. Within June and July the two regions are comparable on depth,
+gear and years sampled, so the difference is not a by-product of what was sampled.
+
+```{r check-shelf-controls}
+effort %>% filter(!is.na(region), sta_depth_m <= SHELF_M) %>%
+  group_by(region) %>%
+  summarise(shelf_tows = n(), pct_in_june_july = round(100 * mean(month %in% PEAK)),
+            .groups = "drop") %>%
+  left_join(effort %>% filter(!is.na(region), month %in% PEAK, year %in% SERIES) %>%
+              group_by(region) %>%
+              summarise(years = n_distinct(year), depth_median = round(median(sta_depth_m)),
+                        pct_bongo = round(100 * mean(gear == "Bongo")), .groups = "drop"),
+            by = "region") %>%
+  left_join(reg %>% select(region, rate, lo, hi) %>%
+              mutate(across(rate:hi, ~ round(.x, 1))), by = "region")
+```
+
+## Why no interannual trend is fitted
+
+Catch rates rise roughly tenfold between the 1980s and the 2010s. Daytime sampling on the early
+trawl surveys was a known bias, addressed in the mid 1990s. If the rise were real, day and night
+rates should move together across that break. The day rate moves roughly thirtyfold and the night
+rate hardly at all, so the rise tracks the sampling.
+
+```{r check-trend}
+era %>% select(era, night, tows, larvae, per_100) %>%
+  pivot_wider(names_from = era, values_from = c(tows, larvae, per_100)) %>%
+  mutate(fold_change = round(`per_100_1995-2016` / `per_100_1982-1994`, 1))
+```
+
+## June and July sampling ends in 2016
+
+The records run to 2024, but plankton sampling on the summer trawl survey stopped after 2016. Any
+monthly comparison that ignores this sets June and July over one span of years against September
+over another.
+
+```{r check-series-end}
+effort %>% filter(month %in% PEAK, sta_depth_m > 0, sta_depth_m <= SHELF_M) %>%
+  count(year, name = "june_july_shelf_tows") %>%
+  filter(year >= 2013) %>%
+  full_join(tibble(year = 2013:max(gulf$year)), by = "year") %>%
+  arrange(year) %>%
+  mutate(june_july_shelf_tows = coalesce(june_july_shelf_tows, 0L))
 ```
