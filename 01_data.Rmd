@@ -8,18 +8,26 @@ output:
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, comment = "")
 ```
 
-```{r src}
-source("R/setup.R")
-```
-
 Downloads the SEAMAP plankton archive and builds the three tables the analysis uses: sampling
 effort, cobia catch records, and individual larval lengths.
+
+```{r packages}
+library(tidyverse)
+
+dir_raw     <- "data/raw"
+dir_seamap  <- file.path(dir_raw, "seamap")
+dir_derived <- "data/derived"
+for (p in c(dir_seamap, dir_derived)) dir.create(p, recursive = TRUE, showWarnings = FALSE)
+
+BOX    <- list(lon = c(-98, -80), lat = c(18, 31))   # study area
+FATHOM <- 1.8288                                     # DEPTH_SSTA is recorded in fathoms
+```
 
 # Download
 
 The Gulf States Marine Fisheries Commission distributes the whole plankton archive as one zip,
-re-released periodically. The chunk below runs only if the tables are missing; it is a few hundred
-MB on the first pass.
+re-released periodically. The chunk runs only if the tables are missing. It is a few hundred MB on
+the first pass.
 
 ```{r download, eval = !all(file.exists(file.path("data/raw/seamap", c("STAREC.csv", "ISTRWK.csv", "ISARWK.csv", "ILFRWK.csv"))))}
 URL  <- "https://seamapdata.gsmfc.org/files/SEAMAPPlanktonCSV.zip"
@@ -29,8 +37,7 @@ want <- c("STAREC.csv", "ISTRWK.csv", "ISARWK.csv", "ILFRWK.csv")
 if (!file.exists(zipf)) { options(timeout = 3600); download.file(URL, zipf, mode = "wb") }
 inside <- unzip(zipf, list = TRUE)$Name
 for (f in want[!file.exists(file.path(dir_seamap, want))]) {
-  hit <- inside[basename(inside) == f]
-  unzip(zipf, files = hit[1], exdir = dir_seamap, junkpaths = TRUE)
+  unzip(zipf, files = inside[basename(inside) == f][1], exdir = dir_seamap, junkpaths = TRUE)
 }
 writeLines(c(paste("source:", URL), paste("downloaded:", format(Sys.time()))),
            file.path(dir_seamap, "SOURCE.txt"))
@@ -46,9 +53,19 @@ Four tables are used. They key on `V_C_P` (vessel, cruise, station), `V_C_P_S` (
 | `ISARWK` | taxon within a sample | counts, aliquot |
 | `ILFRWK` | measured larva | length |
 
+Every column comes in as character and the first header carries a byte order mark.
+
+```{r reader}
+read_seamap <- function(f) {
+  read_csv(file.path(dir_seamap, f), col_types = cols(.default = col_character()),
+           show_col_types = FALSE, name_repair = "minimal") %>%
+    rename_with(~ str_remove(.x, "^﻿"))
+}
+```
+
 # Stations
 
-`DEPTH_SSTA` is in fathoms, not metres.
+Positions are degrees and minutes in separate columns. `DEPTH_SSTA` is in fathoms, not metres.
 
 ```{r stations}
 starec <- read_seamap("STAREC.csv") %>%
@@ -67,46 +84,59 @@ nrow(starec)
 
 # Effort
 
-One deployment per station per gear class, restricted to sorted bongo and neuston samples. Only
-sorted samples could have yielded an identified larva, so that is the pool any catch rate divides
-by.
+Gear codes from Section II of the survey documentation. `SORT_IST` records whether a sample was
+sorted; only sorted samples could have yielded an identified larva, so they are the pool any catch
+rate divides by.
 
 ```{r effort}
+GEAR <- c("01" = "Bongo", "17" = "Bongo", "11" = "Bongo", "14" = "Bongo", "05" = "Bongo",
+          "12" = "Bongo", "13" = "Bongo", "15" = "Bongo",
+          "03" = "Neuston", "08" = "Neuston",
+          "07" = "Tucker trawl", "09" = "MOCNESS", "02" = "Ring", "04" = "Ring",
+          "16" = "Methot", "06" = "Other")
+SORTED <- c("1", "2", "4", "D")
+
 istrwk <- read_seamap("ISTRWK.csv") %>%
   transmute(v_c_p = substr(V_C_P_S, 1, 10), v_c_p_s = V_C_P_S,
             gear = GEAR[GEAR_ICD], sort_ist = SORT_IST, vol_filt_m3 = as.numeric(VOL_FILT))
 
+# One deployment per station per gear class: a bongo pair and a double neuston frame each count once.
 effort <- istrwk %>%
   filter(gear %in% c("Bongo", "Neuston"), sort_ist %in% SORTED) %>%
   distinct(v_c_p, gear) %>%
   inner_join(starec, by = "v_c_p") %>%
-  filter(in_box(.)) %>%
-  mutate(year = year(date), month = month(date),
-         hour = suppressWarnings(as.integer(substr(str_pad(time_mil, 4, "left", "0"), 1, 2))),
-         night = if_else(is.na(hour) | hour > 23, NA, hour >= 20 | hour < 6)) %>%
-  tag_region()
+  filter(lon >= BOX$lon[1], lon <= BOX$lon[2], lat >= BOX$lat[1], lat <= BOX$lat[2]) %>%
+  mutate(year  = year(date),
+         month = month(date),
+         hour  = suppressWarnings(as.integer(substr(str_pad(time_mil, 4, "left", "0"), 1, 2))),
+         night = if_else(is.na(hour) | hour > 23, NA, hour >= 20 | hour < 6),
+         region = case_when(
+           sta_depth_m <= 0 | sta_depth_m > 200                    ~ NA_character_,
+           lat >= 26 & lat <= 30.5 & lon >= -98 & lon < -88        ~ "Texas-Louisiana shelf",
+           lat >= 25 & lat <= 30.5 & lon >= -88 & lon <  -82       ~ "West Florida shelf"))
 write_csv(effort, file.path(dir_derived, "effort.csv"), na = "")
 count(effort, gear, name = "deployments")
 ```
 
-Sampling is not spread evenly through the year, and that shapes every comparison downstream. The
-spring survey works the open Gulf, the fall survey the shelf, and June--July plankton sampling was
-piggybacked on the shrimp trawl survey, which works west of 88 W. June--July sampling ends with
-the 2016 summer trawl survey, so there is no June or July shelf tow after that while September
-sampling continues.
+Sampling is uneven through the year. The spring survey works the open Gulf, the fall survey the
+shelf, and June and July plankton sampling is carried on the shrimp trawl survey, which works west
+of 88 W and stopped taking plankton after 2016.
 
 ```{r effort-by-month}
-effort %>% filter(sta_depth_m > 0, sta_depth_m <= SHELF_M) %>%
+effort %>% filter(sta_depth_m > 0, sta_depth_m <= 200) %>%
   mutate(era = if_else(year <= 2016, "1982-2016", "2017-2024")) %>%
   count(era, month) %>% pivot_wider(names_from = era, values_from = n, values_fill = 0)
 ```
 
 # Cobia catch
 
-Anchor the taxon match so *Poromitra megalops* and similar do not come along. Counts are of the
-fraction that was sorted, so the aliquot has to be divided back out.
+The match is anchored at the start of the taxon name so that *Poromitra megalops*, a melamphaid
+sharing the species epithet, is not swept in. Counts are of the fraction of a sample that was
+sorted, so the aliquot has to be divided back out.
 
 ```{r catch}
+ALIQ_MULT <- c("1/1" = 1, "1/2" = 2, "1/4" = 4, "1/8" = 8)
+
 catch <- read_seamap("ISARWK.csv") %>%
   filter(str_detect(toupper(TAXON), "^RACHYCENTR")) %>%
   transmute(v_c_p = substr(V_C_P_S, 1, 10), v_c_p_s = V_C_P_S, v_c_p_s_cat = V_C_P_S_CAT,
@@ -120,32 +150,38 @@ sprintf("%.0f larvae sorted, %.0f after the aliquot correction, %d records sub-s
 
 # Lengths
 
-Classified one larva at a time. A tow median buries mixed catches: a tow of 2.4 and 6.0 mm has a
-median of 4.2 and loses its smallest larva.
-
-Size classes are descriptive cuts, round numbers either side of the tertiles. They are not
-developmental stages. Nobody has examined these specimens, and there is no age--length relation
-for wild cobia larvae, so length cannot be turned into age.
+Size classes are round numbers bracketing the tertiles. They are descriptive cuts on length, not
+developmental stages: the specimens were not re-examined, and no age-length relation has been
+published for wild cobia larvae.
 
 ```{r lengths}
+SIZE_LEVELS <- c("Small (<5 mm)", "Medium (5-15 mm)", "Large (>15 mm)")
+
 lengths <- read_seamap("ILFRWK.csv") %>%
   filter(V_C_P_S_CAT %in% catch$v_c_p_s_cat) %>%
   transmute(v_c_p_s_cat = V_C_P_S_CAT, length_mm = as.numeric(LENGTH)) %>%
   filter(!is.na(length_mm)) %>%
-  mutate(size = size_class(length_mm))
+  mutate(size = factor(case_when(length_mm <  5  ~ SIZE_LEVELS[1],
+                                 length_mm <= 15 ~ SIZE_LEVELS[2],
+                                 TRUE            ~ SIZE_LEVELS[3]), levels = SIZE_LEVELS))
 write_csv(lengths, file.path(dir_derived, "lengths.csv"))
 
 round(quantile(lengths$length_mm, c(0, 1/3, 0.5, 2/3, 1)), 1)
 count(lengths, size)
 ```
 
+Classification is per larva. Taking a tow median would bury mixed catches: a tow of 2.4 and 6.0 mm
+has a median of 4.2 mm and loses its smallest larva.
+
 ```{r records}
 by_rec <- lengths %>%
   group_by(v_c_p_s_cat) %>%
   summarise(n_meas = n(), len_med = median(length_mm), len_min = min(length_mm),
-            n_small = sum(size == SIZE_LEVELS[1]), n_mid = sum(size == SIZE_LEVELS[2]),
-            n_big = sum(size == SIZE_LEVELS[3]), .groups = "drop") %>%
+            n_small = sum(size == SIZE_LEVELS[1]),
+            n_mid   = sum(size == SIZE_LEVELS[2]),
+            n_big   = sum(size == SIZE_LEVELS[3]), .groups = "drop") %>%
   mutate(has_small = n_small > 0,
+         # the class holding most of the tow, for one colour per symbol on a map
          size_class = factor(SIZE_LEVELS[max.col(cbind(n_small, n_mid, n_big),
                                                  ties.method = "first")], levels = SIZE_LEVELS))
 
@@ -153,14 +189,19 @@ records <- catch %>%
   left_join(by_rec, by = "v_c_p_s_cat") %>%
   left_join(istrwk %>% select(v_c_p_s, gear, sort_ist, vol_filt_m3), by = "v_c_p_s") %>%
   inner_join(starec, by = "v_c_p") %>%
-  mutate(year = year(date), month = month(date),
-         hour = suppressWarnings(as.integer(substr(str_pad(time_mil, 4, "left", "0"), 1, 2))),
+  mutate(year  = year(date),
+         month = month(date),
+         hour  = suppressWarnings(as.integer(substr(str_pad(time_mil, 4, "left", "0"), 1, 2))),
          night = if_else(is.na(hour) | hour > 23, NA, hour >= 20 | hour < 6),
-         has_small = coalesce(has_small, FALSE)) %>%
-  tag_region()
+         has_small = coalesce(has_small, FALSE),
+         region = case_when(
+           sta_depth_m <= 0 | sta_depth_m > 200              ~ NA_character_,
+           lat >= 26 & lat <= 30.5 & lon >= -98 & lon < -88  ~ "Texas-Louisiana shelf",
+           lat >= 25 & lat <= 30.5 & lon >= -88 & lon <  -82 ~ "West Florida shelf"))
 write_csv(records, file.path(dir_derived, "cobia_records.csv"), na = "")
 
-gulf <- records %>% filter(in_box(.))
+gulf <- records %>%
+  filter(lon >= BOX$lon[1], lon <= BOX$lon[2], lat >= BOX$lat[1], lat <= BOX$lat[2])
 sprintf("%d records, %.0f larvae; %d records and %.0f larvae in the study box; %d measured",
         nrow(records), sum(records$n_total), nrow(gulf), sum(gulf$n_total),
         sum(gulf$n_meas, na.rm = TRUE))

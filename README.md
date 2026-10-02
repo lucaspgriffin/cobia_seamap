@@ -35,10 +35,12 @@ rmarkdown::render("02_analysis.Rmd", output_dir = "docs")
 
 | file | |
 |---|---|
-| `R/setup.R` | packages, paths, SEAMAP code lookups, size bins, basemap |
 | `01_data.Rmd` | download, stations, effort, catch, lengths into `data/derived/` |
 | `02_analysis.Rmd` | distribution, season, the two shelves, size, day and night, checks |
 | `docs/*.html` | knitted output |
+
+Each document is self-contained: constants, gear lookups and basemap are defined where they are
+used rather than hidden in a sourced file.
 
 Figures land in `output/figures/`, `main_` for results and `explore_` for checks.
 

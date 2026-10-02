@@ -1501,23 +1501,65 @@ analysis</h1>
 </div>
 
 
-<pre class="r"><code>source(&quot;R/setup.R&quot;)
-d  &lt;- load_data()
-bm &lt;- basemap()</code></pre>
-<p>Two rules run through everything below. A catch rate divides by
-effort drawn from the same pool as the numerator, which here means
-sorted bongo and neuston deployments. And place is never compared on
-all-year effort, because the survey does not sample the same areas every
+<pre class="r"><code>library(tidyverse); library(sf); library(terra); library(marmap)
+library(patchwork); library(rnaturalearth)
+
+dir_derived &lt;- &quot;data/derived&quot;; dir_fig &lt;- &quot;output/figures&quot;
+dir.create(dir_fig, recursive = TRUE, showWarnings = FALSE)
+
+BOX     &lt;- list(lon = c(-98, -80), lat = c(18, 31))   # study area
+MAP_LAT &lt;- c(23.5, 31)                                # map extent, trimmed north of the Yucatan
+SHELF_M &lt;- 200                                        # shelf cut-off, metres
+PEAK    &lt;- c(6, 7)                                    # spawning-season months
+SERIES  &lt;- 1982:2016                                  # June-July sampling ends with the 2016 survey
+SORTED  &lt;- c(&quot;1&quot;, &quot;2&quot;, &quot;4&quot;, &quot;D&quot;)
+DWH     &lt;- tibble(lon = -88.3660, lat = 28.7366)      # Deepwater Horizon wellhead
+
+SIZE_LEVELS &lt;- c(&quot;Small (&lt;5 mm)&quot;, &quot;Medium (5-15 mm)&quot;, &quot;Large (&gt;15 mm)&quot;)
+SIZE_COLS   &lt;- c(&quot;Small (&lt;5 mm)&quot; = &quot;#D55E00&quot;, &quot;Medium (5-15 mm)&quot; = &quot;#009E73&quot;,
+                 &quot;Large (&gt;15 mm)&quot; = &quot;#0072B2&quot;)
+
+theme_set(theme_bw(base_size = 10) +
+  theme(panel.grid.minor = element_blank(), legend.position = &quot;bottom&quot;,
+        legend.key.height = unit(10, &quot;pt&quot;)))</code></pre>
+<p>Tables built by <code>01_data.Rmd</code>.</p>
+<pre class="r"><code>records &lt;- read_csv(file.path(dir_derived, &quot;cobia_records.csv&quot;), show_col_types = FALSE) %&gt;%
+  mutate(size_class = factor(size_class, levels = SIZE_LEVELS))
+lengths &lt;- read_csv(file.path(dir_derived, &quot;lengths.csv&quot;), show_col_types = FALSE) %&gt;%
+  mutate(size = factor(size, levels = SIZE_LEVELS))
+effort  &lt;- read_csv(file.path(dir_derived, &quot;effort.csv&quot;), show_col_types = FALSE)
+
+gulf &lt;- records %&gt;%
+  filter(lon &gt;= BOX$lon[1], lon &lt;= BOX$lon[2], lat &gt;= BOX$lat[1], lat &lt;= BOX$lat[2])
+
+# Numerator for any rate: the same gears and sorted status the effort pool is built from.
+rates &lt;- gulf %&gt;% filter(gear %in% c(&quot;Bongo&quot;, &quot;Neuston&quot;), sort_ist %in% SORTED)</code></pre>
+<p>Bathymetry, isobaths and coastline, used by the three maps.</p>
+<pre class="r"><code>b &lt;- getNOAA.bathy(BOX$lon[1], BOX$lon[2], BOX$lat[1], BOX$lat[2], resolution = 1, keep = TRUE,
+                   path = dir_derived)
+bathy &lt;- as.xyz(b) %&gt;% set_names(c(&quot;lon&quot;, &quot;lat&quot;, &quot;z&quot;)) %&gt;% filter(z &lt;= 0)
+iso &lt;- as.contour(rast(as.xyz(b), type = &quot;xyz&quot;, crs = &quot;EPSG:4326&quot;),
+                  levels = c(-200, -1000, -2000, -3000)) %&gt;%
+  st_as_sf() %&gt;% st_set_crs(4326) %&gt;% mutate(depth_m = -level)
+land &lt;- ne_countries(scale = &quot;medium&quot;, returnclass = &quot;sf&quot;) %&gt;% st_make_valid() %&gt;%
+  st_crop(st_bbox(c(xmin = BOX$lon[1], xmax = BOX$lon[2],
+                    ymin = BOX$lat[1], ymax = BOX$lat[2]), crs = st_crs(4326)))
+map_frame &lt;- list(coord_sf(xlim = BOX$lon, ylim = MAP_LAT, expand = FALSE), labs(x = NULL, y = NULL),
+                  theme(panel.grid = element_blank()))</code></pre>
+<p>Catch rates divide by effort drawn from the same pool as the
+numerator, which here is sorted bongo and neuston deployments.
+Comparisons between places are restricted to the months both were
+sampled, because the surveys do not cover the same areas in every
 month.</p>
 <pre class="r"><code>sprintf(&quot;off-gear or unsorted, kept on the map but out of every rate: %d records, %.0f larvae&quot;,
-        nrow(d$gulf) - nrow(d$rates), sum(d$gulf$n_total) - sum(d$rates$n_total))</code></pre>
+        nrow(gulf) - nrow(rates), sum(gulf$n_total) - sum(rates$n_total))</code></pre>
 <pre><code>[1] &quot;off-gear or unsorted, kept on the map but out of every rate: 20 records, 26 larvae&quot;</code></pre>
 <div id="distribution" class="section level1">
 <h1>Distribution</h1>
 <p>Every record in the study box, coloured by the size class holding
 most of the tow. Descriptive, so no effort is involved; the catch-rate
 maps come later.</p>
-<pre class="r"><code>count(d$gulf, size_class)</code></pre>
+<pre class="r"><code>count(gulf, size_class)</code></pre>
 <div class="kable-table">
 <table>
 <thead>
@@ -1546,7 +1588,7 @@ maps come later.</p>
 </tbody>
 </table>
 </div>
-<pre class="r"><code>d$gulf %&gt;% slice_max(n_total, n = 3) %&gt;% select(date, lat, lon, gear, n_total, n_meas)</code></pre>
+<pre class="r"><code>gulf %&gt;% slice_max(n_total, n = 3) %&gt;% select(date, lat, lon, gear, n_total, n_meas)</code></pre>
 <div class="kable-table">
 <table>
 <thead>
@@ -1602,19 +1644,19 @@ was sorted in that case, so the number is real rather than a
 sub-sampling artefact. Symbol size is binned for that reason: a
 continuous scale lets the one tow flatten everything else.</p>
 <pre class="r"><code>p_dist &lt;- ggplot() +
-  geom_raster(data = bm$bathy, aes(lon, lat, fill = z), interpolate = TRUE) +
+  geom_raster(data = bathy, aes(lon, lat, fill = z), interpolate = TRUE) +
   scale_fill_gradient(low = &quot;#1f3d6b&quot;, high = &quot;#dbe9f6&quot;, name = &quot;Depth (m)&quot;,
                       labels = function(x) -x, breaks = c(0, -3000, -6000),
                       guide = guide_colourbar(order = 3, barwidth = unit(48, &quot;pt&quot;),
                                               barheight = unit(6, &quot;pt&quot;))) +
-  geom_sf(data = filter(bm$iso, depth_m == 200), colour = &quot;grey20&quot;, linewidth = 0.35) +
-  geom_sf(data = filter(bm$iso, depth_m &gt; 200), colour = &quot;grey35&quot;, linewidth = 0.2,
+  geom_sf(data = filter(iso, depth_m == 200), colour = &quot;grey20&quot;, linewidth = 0.35) +
+  geom_sf(data = filter(iso, depth_m &gt; 200), colour = &quot;grey35&quot;, linewidth = 0.2,
           linetype = &quot;dotted&quot;) +
-  geom_sf(data = bm$land, fill = &quot;grey85&quot;, colour = &quot;grey40&quot;, linewidth = 0.2) +
+  geom_sf(data = land, fill = &quot;grey85&quot;, colour = &quot;grey40&quot;, linewidth = 0.2) +
   geom_point(data = DWH, aes(lon, lat), shape = 8, size = 2.6, stroke = 0.9) +
   annotate(&quot;text&quot;, x = DWH$lon + 0.3, y = DWH$lat - 0.45, label = &quot;DWH&quot;, size = 2.9, hjust = 0) +
   # smallest drawn last so they are not buried under the commoner medium tows
-  geom_point(data = d$gulf %&gt;% filter(!is.na(size_class)) %&gt;%
+  geom_point(data = gulf %&gt;% filter(!is.na(size_class)) %&gt;%
                arrange(desc(as.integer(size_class)), desc(n_total)),
              aes(lon, lat, size = n_total, colour = size_class), alpha = 0.75) +
   scale_colour_manual(values = SIZE_COLS, name = &quot;Most of the tow&quot;, drop = FALSE) +
@@ -1634,11 +1676,11 @@ p_dist</code></pre>
 footprint and one year range. Gulf-wide effort mixes shelf and deep
 water in proportions that change month to month, and June–July sampling
 ends in 2016 while September sampling continues.</p>
-<pre class="r"><code>shelf &lt;- function(x) filter(x, sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M, year %in% SERIES)
-recs  &lt;- shelf(d$rates)
-cpue  &lt;- recs %&gt;% count(month, wt = n_total, name = &quot;n_larvae&quot;) %&gt;%
+<pre class="r"><code>recs &lt;- rates  %&gt;% filter(sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M, year %in% SERIES)
+eff  &lt;- effort %&gt;% filter(sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M, year %in% SERIES)
+cpue &lt;- recs %&gt;% count(month, wt = n_total, name = &quot;n_larvae&quot;) %&gt;%
   complete(month = 1:12, fill = list(n_larvae = 0)) %&gt;%
-  left_join(shelf(d$effort) %&gt;% count(month, name = &quot;n_tows&quot;), by = &quot;month&quot;) %&gt;%
+  left_join(eff %&gt;% count(month, name = &quot;n_tows&quot;), by = &quot;month&quot;) %&gt;%
   mutate(per_100 = if_else(n_tows &gt; 0, 100 * n_larvae / n_tows, NA_real_),
          month_lab = factor(month.abb[month], levels = month.abb))
 write_csv(cpue, file.path(dir_derived, &quot;cpue_by_month.csv&quot;), na = &quot;&quot;)
@@ -1735,9 +1777,9 @@ removes it.</p>
 <p>The peak is not a footprint artefact either. Held to the
 Texas–Louisiana shelf alone, which is sampled in every month, the margin
 widens rather than narrows.</p>
-<pre class="r"><code>tx &lt;- d$effort %&gt;% filter(region == &quot;Texas-Louisiana shelf&quot;, year %in% SERIES) %&gt;%
+<pre class="r"><code>tx &lt;- effort %&gt;% filter(region == &quot;Texas-Louisiana shelf&quot;, year %in% SERIES) %&gt;%
   count(month, name = &quot;tows&quot;) %&gt;%
-  left_join(d$rates %&gt;% filter(region == &quot;Texas-Louisiana shelf&quot;, year %in% SERIES) %&gt;%
+  left_join(rates %&gt;% filter(region == &quot;Texas-Louisiana shelf&quot;, year %in% SERIES) %&gt;%
               count(month, wt = n_total, name = &quot;larvae&quot;), by = &quot;month&quot;) %&gt;%
   mutate(rate = round(100 * coalesce(larvae, 0) / tows, 1))
 tx %&gt;% filter(month %in% c(5:9)) %&gt;% select(month, tows, larvae, rate)</code></pre>
@@ -1789,7 +1831,7 @@ tx %&gt;% filter(month %in% c(5:9)) %&gt;% select(month, tows, larvae, rate)</co
 fits a cohort spawned in or before May rather than peak spawning in
 June. Two thirds of larvae were measured, so the bar is split by the
 measured composition of that month.</p>
-<pre class="r"><code>mix &lt;- d$lengths %&gt;% inner_join(select(recs, v_c_p_s_cat, month), by = &quot;v_c_p_s_cat&quot;) %&gt;%
+<pre class="r"><code>mix &lt;- lengths %&gt;% inner_join(select(recs, v_c_p_s_cat, month), by = &quot;v_c_p_s_cat&quot;) %&gt;%
   count(month, size, name = &quot;n_meas&quot;) %&gt;%
   group_by(month) %&gt;% mutate(share = n_meas / sum(n_meas)) %&gt;% ungroup()
 
@@ -1813,8 +1855,8 @@ rather than read off an annual map. West Florida takes only about 12% of
 its shelf tows in June–July against 27% on the Texas–Louisiana shelf,
 because the summer survey works west of 88 W. Everything here is
 restricted to June–July for that reason.</p>
-<pre class="r"><code>peak_eff  &lt;- d$effort %&gt;% filter(month %in% PEAK)
-peak_recs &lt;- d$rates  %&gt;% filter(month %in% PEAK)
+<pre class="r"><code>peak_eff  &lt;- effort %&gt;% filter(month %in% PEAK)
+peak_recs &lt;- rates  %&gt;% filter(month %in% PEAK)
 CELL &lt;- 0.5
 cell &lt;- function(x) mutate(x, cx = floor(lon / CELL) * CELL + CELL / 2,
                               cy = floor(lat / CELL) * CELL + CELL / 2)
@@ -1826,8 +1868,8 @@ cells &lt;- cell(peak_eff) %&gt;% count(cx, cy, name = &quot;n_tows&quot;) %&gt;
 sprintf(&quot;cells with &gt;=10 June-July tows: %d; of those with no cobia: %d&quot;,
         sum(cells$searched), sum(cells$searched &amp; cells$n_larvae == 0))</code></pre>
 <pre><code>[1] &quot;cells with &gt;=10 June-July tows: 114; of those with no cobia: 48&quot;</code></pre>
-<pre class="r"><code>frame &lt;- list(geom_sf(data = filter(bm$iso, depth_m == 200), colour = &quot;grey35&quot;, linewidth = 0.3),
-              geom_sf(data = bm$land, fill = &quot;grey85&quot;, colour = &quot;grey40&quot;, linewidth = 0.2),
+<pre class="r"><code>frame &lt;- list(geom_sf(data = filter(iso, depth_m == 200), colour = &quot;grey35&quot;, linewidth = 0.3),
+              geom_sf(data = land, fill = &quot;grey85&quot;, colour = &quot;grey40&quot;, linewidth = 0.2),
               map_frame, theme(panel.background = element_rect(fill = &quot;white&quot;)),
               theme(plot.title = element_text(size = 8.5, face = &quot;plain&quot;)))
 p_eff &lt;- ggplot() + geom_tile(data = cells, aes(cx, cy, fill = n_tows)) +
@@ -1967,8 +2009,8 @@ p_bar</code></pre>
 </div>
 <div id="size" class="section level1">
 <h1>Size</h1>
-<pre class="r"><code>by_depth &lt;- d$lengths %&gt;%
-  inner_join(select(d$gulf, v_c_p_s_cat, sta_depth_m, month), by = &quot;v_c_p_s_cat&quot;) %&gt;%
+<pre class="r"><code>by_depth &lt;- lengths %&gt;%
+  inner_join(select(gulf, v_c_p_s_cat, sta_depth_m, month), by = &quot;v_c_p_s_cat&quot;) %&gt;%
   filter(sta_depth_m &gt; 0)
 by_depth %&gt;% mutate(where = if_else(sta_depth_m &lt;= SHELF_M, &quot;shelf&quot;, &quot;off-shelf&quot;)) %&gt;%
   group_by(where) %&gt;% summarise(n = n(), median_mm = median(length_mm),
@@ -2071,10 +2113,10 @@ result is checked against it rather than resting on it. It weakens
 gradually as larger and more dispersed larvae are swept in, which is
 what should happen, and never reverses.</p>
 <pre class="r"><code>map_dfr(c(3, 3.2, 3.5, 4, 4.5, 5), function(cut) {
-  keep &lt;- d$lengths %&gt;% group_by(v_c_p_s_cat) %&gt;%
+  keep &lt;- lengths %&gt;% group_by(v_c_p_s_cat) %&gt;%
     summarise(hit = any(length_mm &lt;= cut), .groups = &quot;drop&quot;) %&gt;% filter(hit)
-  g &lt;- d$gulf %&gt;% filter(v_c_p_s_cat %in% keep$v_c_p_s_cat, !is.na(sta_depth_m))
-  tibble(cut_mm = cut, larvae = sum(d$lengths$length_mm &lt;= cut), records = nrow(g),
+  g &lt;- gulf %&gt;% filter(v_c_p_s_cat %in% keep$v_c_p_s_cat, !is.na(sta_depth_m))
+  tibble(cut_mm = cut, larvae = sum(lengths$length_mm &lt;= cut), records = nrow(g),
          pct_shelf = round(100 * mean(g$sta_depth_m &lt;= SHELF_M)))
 })</code></pre>
 <div class="kable-table">
@@ -2136,11 +2178,11 @@ predictions. Avoidance should bite hardest on the largest larvae, which
 see better and swim harder. Vertical movement should push catch between
 the gears, since neuston fishes the top half-metre and bongo obliquely
 through the column.</p>
-<pre class="r"><code>diel &lt;- d$lengths %&gt;%
-  inner_join(d$rates %&gt;% filter(!is.na(night)) %&gt;% select(v_c_p_s_cat, gear, night),
+<pre class="r"><code>diel &lt;- lengths %&gt;%
+  inner_join(rates %&gt;% filter(!is.na(night)) %&gt;% select(v_c_p_s_cat, gear, night),
              by = &quot;v_c_p_s_cat&quot;) %&gt;%
   count(gear, night, size, name = &quot;larvae&quot;) %&gt;%
-  left_join(d$effort %&gt;% filter(!is.na(night)) %&gt;% count(gear, night, name = &quot;tows&quot;),
+  left_join(effort %&gt;% filter(!is.na(night)) %&gt;% count(gear, night, name = &quot;tows&quot;),
             by = c(&quot;gear&quot;, &quot;night&quot;)) %&gt;%
   mutate(per_100 = 100 * larvae / tows) %&gt;%
   select(gear, size, night, per_100) %&gt;%
@@ -2226,11 +2268,11 @@ thirtyfold while the night rate barely moves, which points at the early
 daytime samples rather than at the ocean. No interannual trend is
 plotted for that reason, although catch rates do rise about tenfold from
 the 1980s to the 2010s.</p>
-<pre class="r"><code>era &lt;- d$effort %&gt;% filter(!is.na(night), month %in% PEAK, sta_depth_m &gt; 0,
+<pre class="r"><code>era &lt;- effort %&gt;% filter(!is.na(night), month %in% PEAK, sta_depth_m &gt; 0,
                            sta_depth_m &lt;= SHELF_M, year %in% SERIES) %&gt;%
   mutate(era = if_else(year &lt; 1995, &quot;1982-1994&quot;, &quot;1995-2016&quot;)) %&gt;%
   count(era, night, name = &quot;tows&quot;) %&gt;%
-  left_join(d$rates %&gt;% filter(!is.na(night), month %in% PEAK, sta_depth_m &gt; 0,
+  left_join(rates %&gt;% filter(!is.na(night), month %in% PEAK, sta_depth_m &gt; 0,
                                sta_depth_m &lt;= SHELF_M, year %in% SERIES) %&gt;%
               mutate(era = if_else(year &lt; 1995, &quot;1982-1994&quot;, &quot;1995-2016&quot;)) %&gt;%
               count(era, night, wt = n_total, name = &quot;larvae&quot;), by = c(&quot;era&quot;, &quot;night&quot;)) %&gt;%
@@ -2299,7 +2341,10 @@ say &lt;- function(ok, label, detail = &quot;&quot;) {
   if (!is.na(ok) &amp;&amp; !ok) fails &lt;&lt;- c(fails, label)
   cat(sprintf(&quot;[%s] %-52s %s\n&quot;, tag, label, detail))
 }
-isarwk &lt;- read_seamap(&quot;ISARWK.csv&quot;)
+isarwk &lt;- read_csv(&quot;data/raw/seamap/ISARWK.csv&quot;, col_types = cols(.default = col_character()),
+                   show_col_types = FALSE, name_repair = &quot;minimal&quot;) %&gt;%
+  rename_with(~ str_remove(.x, &quot;^\ufeff&quot;))
+ALIQ_MULT &lt;- c(&quot;1/1&quot; = 1, &quot;1/2&quot; = 2, &quot;1/4&quot; = 4, &quot;1/8&quot; = 8)
 raw &lt;- isarwk %&gt;% filter(str_detect(toupper(TAXON), &quot;^RACHYCENTR&quot;)) %&gt;%
   mutate(n = (coalesce(as.numeric(MEAS), 0) + coalesce(as.numeric(NOT_MEAS), 0)) *
              coalesce(ALIQ_MULT[ALIQUOT], 1))
@@ -2310,74 +2355,72 @@ cat(&quot;-- extraction --\n&quot;)</code></pre>
     nrow(distinct(raw, TAXON)), &quot;taxon filter admits no partial-name matches&quot;,
     paste(sort(unique(raw$TAXON)), collapse = &quot;; &quot;))</code></pre>
 <pre><code>[PASS] taxon filter admits no partial-name matches          RACHYCENTRIDAE; RACHYCENTRON; RACHYCENTRON CANADUM</code></pre>
-<pre class="r"><code>say(nrow(raw) == nrow(d$records), &quot;record count matches the raw table&quot;, nrow(d$records))</code></pre>
+<pre class="r"><code>say(nrow(raw) == nrow(records), &quot;record count matches the raw table&quot;, nrow(records))</code></pre>
 <pre><code>[PASS] record count matches the raw table                   549</code></pre>
-<pre class="r"><code>say(abs(sum(raw$n) - sum(d$records$n_total)) &lt; 1e-6, &quot;aliquot-corrected larva count matches&quot;,
-    sprintf(&quot;%.0f larvae, %d sub-sampled&quot;, sum(d$records$n_total), sum(d$records$aliquot != &quot;1/1&quot;)))</code></pre>
+<pre class="r"><code>say(abs(sum(raw$n) - sum(records$n_total)) &lt; 1e-6, &quot;aliquot-corrected larva count matches&quot;,
+    sprintf(&quot;%.0f larvae, %d sub-sampled&quot;, sum(records$n_total), sum(records$aliquot != &quot;1/1&quot;)))</code></pre>
 <pre><code>[PASS] aliquot-corrected larva count matches                1501 larvae, 12 sub-sampled</code></pre>
 <pre class="r"><code>say(all(raw$ALIQUOT %in% names(ALIQ_MULT)), &quot;every aliquot value is recognised&quot;)</code></pre>
 <pre><code>[PASS] every aliquot value is recognised                    </code></pre>
-<pre class="r"><code>say(!any(duplicated(d$records$v_c_p_s_cat)), &quot;catalogue keys are unique&quot;)</code></pre>
+<pre class="r"><code>say(!any(duplicated(records$v_c_p_s_cat)), &quot;catalogue keys are unique&quot;)</code></pre>
 <pre><code>[PASS] catalogue keys are unique                            </code></pre>
 <pre class="r"><code>cat(&quot;\n-- station join --\n&quot;)</code></pre>
 <pre><code>
 -- station join --</code></pre>
-<pre class="r"><code>say(all(!is.na(d$records$lat)), &quot;every record joined to a station&quot;)</code></pre>
+<pre class="r"><code>say(all(!is.na(records$lat)), &quot;every record joined to a station&quot;)</code></pre>
 <pre><code>[PASS] every record joined to a station                     </code></pre>
-<pre class="r"><code>say(all(d$records$lat &gt; 17 &amp; d$records$lat &lt; 40), &quot;latitudes plausible&quot;,
-    sprintf(&quot;%.1f to %.1f N&quot;, min(d$records$lat), max(d$records$lat)))</code></pre>
+<pre class="r"><code>say(all(records$lat &gt; 17 &amp; records$lat &lt; 40), &quot;latitudes plausible&quot;,
+    sprintf(&quot;%.1f to %.1f N&quot;, min(records$lat), max(records$lat)))</code></pre>
 <pre><code>[PASS] latitudes plausible                                  23.7 to 35.5 N</code></pre>
-<pre class="r"><code>say(all(d$records$date &lt;= Sys.Date()), &quot;dates in range&quot;,
-    sprintf(&quot;%s to %s&quot;, min(d$records$date), max(d$records$date)))</code></pre>
+<pre class="r"><code>say(all(records$date &lt;= Sys.Date()), &quot;dates in range&quot;,
+    sprintf(&quot;%s to %s&quot;, min(records$date), max(records$date)))</code></pre>
 <pre><code>[PASS] dates in range                                       1982-06-23 to 2024-09-05</code></pre>
-<pre class="r"><code>say(NA, &quot;records outside the study box&quot;, nrow(d$records) - nrow(d$gulf))</code></pre>
+<pre class="r"><code>say(NA, &quot;records outside the study box&quot;, nrow(records) - nrow(gulf))</code></pre>
 <pre><code>[FLAG] records outside the study box                        2</code></pre>
 <pre class="r"><code>cat(&quot;\n-- numerator against denominator --\n&quot;)</code></pre>
 <pre><code>
 -- numerator against denominator --</code></pre>
-<pre class="r"><code>off &lt;- d$gulf %&gt;% filter(!gear %in% c(&quot;Bongo&quot;, &quot;Neuston&quot;)) %&gt;% count(gear, wt = n_total)
+<pre class="r"><code>off &lt;- gulf %&gt;% filter(!gear %in% c(&quot;Bongo&quot;, &quot;Neuston&quot;)) %&gt;% count(gear, wt = n_total)
 say(NA, &quot;cobia taken by gear outside the effort pool&quot;,
     if (nrow(off) == 0) &quot;none&quot; else sprintf(&quot;%.0f larvae in %s; out of rates&quot;, sum(off$n), off$gear))</code></pre>
 <pre><code>[FLAG] cobia taken by gear outside the effort pool          23 larvae in MOCNESS; out of rates</code></pre>
-<pre class="r"><code>say(NA, &quot;cobia tows not flagged sorted&quot;, sum(!d$gulf$sort_ist %in% SORTED))</code></pre>
+<pre class="r"><code>say(NA, &quot;cobia tows not flagged sorted&quot;, sum(!gulf$sort_ist %in% SORTED))</code></pre>
 <pre><code>[FLAG] cobia tows not flagged sorted                        2</code></pre>
-<pre class="r"><code>chk &lt;- d$gulf %&gt;% filter(gear %in% c(&quot;Bongo&quot;, &quot;Neuston&quot;), sort_ist %in% SORTED,
+<pre class="r"><code>chk &lt;- gulf %&gt;% filter(gear %in% c(&quot;Bongo&quot;, &quot;Neuston&quot;), sort_ist %in% SORTED,
                          sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M, year %in% SERIES)
 say(abs(sum(cpue$n_larvae) - sum(chk$n_total)) &lt; 1e-6,
     &quot;rate numerator reproduces under all four filters&quot;,
-    sprintf(&quot;%.0f in the rates, %.0f in the box&quot;, sum(cpue$n_larvae), sum(d$gulf$n_total)))</code></pre>
+    sprintf(&quot;%.0f in the rates, %.0f in the box&quot;, sum(cpue$n_larvae), sum(gulf$n_total)))</code></pre>
 <pre><code>[PASS] rate numerator reproduces under all four filters     1262 in the rates, 1499 in the box</code></pre>
-<pre class="r"><code>say(max(d$effort$year[d$effort$month %in% PEAK &amp; d$effort$sta_depth_m &lt;= SHELF_M]) &lt;= 2016,
+<pre class="r"><code>say(max(effort$year[effort$month %in% PEAK &amp; effort$sta_depth_m &lt;= SHELF_M]) &lt;= 2016,
     &quot;June-July shelf series ends before the records do&quot;,
-    sprintf(&quot;records to %d&quot;, max(d$gulf$year)))</code></pre>
+    sprintf(&quot;records to %d&quot;, max(gulf$year)))</code></pre>
 <pre><code>[PASS] June-July shelf series ends before the records do    records to 2024</code></pre>
 <pre class="r"><code>cat(&quot;\n-- lengths --\n&quot;)</code></pre>
 <pre><code>
 -- lengths --</code></pre>
 <pre class="r"><code>say(NA, &quot;measurement coverage&quot;,
-    sprintf(&quot;%d of %.0f (%.0f%%)&quot;, sum(d$gulf$n_meas, na.rm = TRUE), sum(d$gulf$n_total),
-            100 * sum(d$gulf$n_meas, na.rm = TRUE) / sum(d$gulf$n_total)))</code></pre>
+    sprintf(&quot;%d of %.0f (%.0f%%)&quot;, sum(gulf$n_meas, na.rm = TRUE), sum(gulf$n_total),
+            100 * sum(gulf$n_meas, na.rm = TRUE) / sum(gulf$n_total)))</code></pre>
 <pre><code>[FLAG] measurement coverage                                 984 of 1499 (66%)</code></pre>
-<pre class="r"><code>big &lt;- d$gulf %&gt;% filter(n_total &gt; 10)
+<pre class="r"><code>big &lt;- gulf %&gt;% filter(n_total &gt; 10)
 say(NA, &quot;large tows with under half measured&quot;,
     sprintf(&quot;%d of %d tows holding &gt;10 larvae&quot;,
             sum(big$n_meas / big$n_total &lt; 0.5, na.rm = TRUE), nrow(big)))</code></pre>
 <pre><code>[FLAG] large tows with under half measured                  11 of 21 tows holding &gt;10 larvae</code></pre>
-<pre class="r"><code>say(all(d$lengths$length_mm &gt; 1 &amp; d$lengths$length_mm &lt; 70), &quot;lengths plausible&quot;,
-    sprintf(&quot;%.1f to %.1f mm&quot;, min(d$lengths$length_mm), max(d$lengths$length_mm)))</code></pre>
+<pre class="r"><code>say(all(lengths$length_mm &gt; 1 &amp; lengths$length_mm &lt; 70), &quot;lengths plausible&quot;,
+    sprintf(&quot;%.1f to %.1f mm&quot;, min(lengths$length_mm), max(lengths$length_mm)))</code></pre>
 <pre><code>[PASS] lengths plausible                                    1.4 to 66.0 mm</code></pre>
-<pre class="r"><code>say(all(d$gulf$n_meas &lt;= d$gulf$n_total, na.rm = TRUE), &quot;measured never exceeds counted&quot;)</code></pre>
+<pre class="r"><code>say(all(gulf$n_meas &lt;= gulf$n_total, na.rm = TRUE), &quot;measured never exceeds counted&quot;)</code></pre>
 <pre><code>[PASS] measured never exceeds counted                       </code></pre>
-<pre class="r"><code>say(all(d$gulf$n_small + d$gulf$n_mid + d$gulf$n_big == d$gulf$n_meas, na.rm = TRUE),
+<pre class="r"><code>say(all(gulf$n_small + gulf$n_mid + gulf$n_big == gulf$n_meas, na.rm = TRUE),
     &quot;size-class counts sum to the measured total&quot;)</code></pre>
 <pre><code>[PASS] size-class counts sum to the measured total          </code></pre>
 <pre class="r"><code>cat(&quot;\n-- depth --\n&quot;)</code></pre>
 <pre><code>
 -- depth --</code></pre>
-<pre class="r"><code>chk_d &lt;- d$gulf %&gt;% filter(sta_depth_m &gt; 0)
-chk_d$etopo &lt;- -terra::extract(rast(as.xyz(getNOAA.bathy(BOX$lon[1], BOX$lon[2], BOX$lat[1],
-                                 BOX$lat[2], resolution = 1, keep = TRUE, path = dir_derived)),
-                                 type = &quot;xyz&quot;, crs = &quot;EPSG:4326&quot;),
+<pre class="r"><code>chk_d &lt;- gulf %&gt;% filter(sta_depth_m &gt; 0)
+chk_d$etopo &lt;- -terra::extract(rast(as.xyz(b), type = &quot;xyz&quot;, crs = &quot;EPSG:4326&quot;),
                                as.matrix(chk_d[, c(&quot;lon&quot;, &quot;lat&quot;)]))[, 1]
 chk_d &lt;- filter(chk_d, etopo &gt; 0)
 rr &lt;- cor(log10(chk_d$sta_depth_m), log10(chk_d$etopo))
@@ -2392,9 +2435,9 @@ say(rr &gt; 0.9, &quot;recorded depth agrees with ETOPO&quot;,
     sprintf(&quot;Jun %.1f, Jul %.1f, Sep %.1f&quot;, tx$rate[tx$month == 6], tx$rate[tx$month == 7],
             tx$rate[tx$month == 9]))</code></pre>
 <pre><code>[PASS] June-July peak survives on one fixed area            Jun 32.2, Jul 18.8, Sep 7.9</code></pre>
-<pre class="r"><code>tod_e &lt;- d$effort %&gt;% filter(!is.na(night), sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M,
+<pre class="r"><code>tod_e &lt;- effort %&gt;% filter(!is.na(night), sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M,
                              year %in% SERIES) %&gt;% count(month, night, name = &quot;tows&quot;)
-tod &lt;- d$rates %&gt;% filter(!is.na(night), sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M,
+tod &lt;- rates %&gt;% filter(!is.na(night), sta_depth_m &gt; 0, sta_depth_m &lt;= SHELF_M,
                           year %in% SERIES) %&gt;%
   count(month, night, wt = n_total, name = &quot;larvae&quot;) %&gt;%
   right_join(tod_e, by = c(&quot;month&quot;, &quot;night&quot;)) %&gt;%
@@ -2408,7 +2451,7 @@ say(pk_d &gt; 3 * sp_d &amp;&amp; pk_n &gt; 3 * sp_n, &quot;peak present in day 
     paste(sprintf(&quot;%s %.1f/100 on %d tows&quot;, str_remove(reg$region, &quot; shelf&quot;), reg$rate, reg$tows),
           collapse = &quot;; &quot;))</code></pre>
 <pre><code>[PASS] regional comparison season-matched, both sides sampled Texas-Louisiana 25.8/100 on 3388 tows; West Florida 4.1/100 on 754 tows</code></pre>
-<pre class="r"><code>wf &lt;- d$effort %&gt;% filter(!is.na(region), sta_depth_m &lt;= SHELF_M) %&gt;%
+<pre class="r"><code>wf &lt;- effort %&gt;% filter(!is.na(region), sta_depth_m &lt;= SHELF_M) %&gt;%
   group_by(region) %&gt;% summarise(pct = 100 * mean(month %in% PEAK), .groups = &quot;drop&quot;)
 say(NA, &quot;share of shelf tows taken in June-July&quot;,
     paste(sprintf(&quot;%s %.0f%%&quot;, str_remove(wf$region, &quot; shelf&quot;), wf$pct), collapse = &quot;; &quot;))</code></pre>
