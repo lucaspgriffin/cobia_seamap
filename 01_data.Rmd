@@ -66,8 +66,13 @@ read_seamap <- function(f) {
 # Stations
 
 Positions are degrees and minutes in separate columns. `DEPTH_SSTA` is in fathoms, not metres.
+`TEMP_SSURF` is surface temperature in degrees Celsius and carries zeros where no reading was
+taken, so values outside 5-36 degrees are set to missing rather than treated as cold water. The
+station table holds no salinity field.
 
 ```{r stations}
+TEMP_OK <- c(5, 36)                                  # outside this range TEMP_SSURF is a sentinel
+
 starec <- read_seamap("STAREC.csv") %>%
   transmute(v_c_p    = V_C_P,
             date     = as.Date(substr(MO_DAY_YR, 1, 10)),
@@ -75,11 +80,16 @@ starec <- read_seamap("STAREC.csv") %>%
             gears    = GEARS,
             lat = as.numeric(S_LATD) + as.numeric(S_LATM) / 60,
             lon = (as.numeric(S_LOND) + as.numeric(S_LONM) / 60) * if_else(S_LONH == "W", -1, 1),
-            sta_depth_m = as.numeric(DEPTH_SSTA) * FATHOM) %>%
+            sta_depth_m = as.numeric(DEPTH_SSTA) * FATHOM,
+            temp_surf = as.numeric(TEMP_SSURF)) %>%
+  mutate(temp_surf = if_else(temp_surf >= TEMP_OK[1] & temp_surf <= TEMP_OK[2], temp_surf, NA_real_)) %>%
   filter(!is.na(date), !is.na(lat), !is.na(lon)) %>%
   arrange(v_c_p, date) %>%
   distinct(v_c_p, .keep_all = TRUE)        # V_C_P should be unique; keep the first if not
-nrow(starec)
+
+sprintf("%d stations; surface temperature on %d (%.1f%%)",
+        nrow(starec), sum(!is.na(starec$temp_surf)),
+        100 * mean(!is.na(starec$temp_surf)))
 ```
 
 # Effort

@@ -1581,20 +1581,31 @@ byte order mark.</p>
 <div id="stations" class="section level1">
 <h1>Stations</h1>
 <p>Positions are degrees and minutes in separate columns.
-<code>DEPTH_SSTA</code> is in fathoms, not metres.</p>
-<pre class="r"><code>starec &lt;- read_seamap(&quot;STAREC.csv&quot;) %&gt;%
+<code>DEPTH_SSTA</code> is in fathoms, not metres.
+<code>TEMP_SSURF</code> is surface temperature in degrees Celsius and
+carries zeros where no reading was taken, so values outside 5-36 degrees
+are set to missing rather than treated as cold water. The station table
+holds no salinity field.</p>
+<pre class="r"><code>TEMP_OK &lt;- c(5, 36)                                  # outside this range TEMP_SSURF is a sentinel
+
+starec &lt;- read_seamap(&quot;STAREC.csv&quot;) %&gt;%
   transmute(v_c_p    = V_C_P,
             date     = as.Date(substr(MO_DAY_YR, 1, 10)),
             time_mil = TIME_MIL,
             gears    = GEARS,
             lat = as.numeric(S_LATD) + as.numeric(S_LATM) / 60,
             lon = (as.numeric(S_LOND) + as.numeric(S_LONM) / 60) * if_else(S_LONH == &quot;W&quot;, -1, 1),
-            sta_depth_m = as.numeric(DEPTH_SSTA) * FATHOM) %&gt;%
+            sta_depth_m = as.numeric(DEPTH_SSTA) * FATHOM,
+            temp_surf = as.numeric(TEMP_SSURF)) %&gt;%
+  mutate(temp_surf = if_else(temp_surf &gt;= TEMP_OK[1] &amp; temp_surf &lt;= TEMP_OK[2], temp_surf, NA_real_)) %&gt;%
   filter(!is.na(date), !is.na(lat), !is.na(lon)) %&gt;%
   arrange(v_c_p, date) %&gt;%
   distinct(v_c_p, .keep_all = TRUE)        # V_C_P should be unique; keep the first if not
-nrow(starec)</code></pre>
-<pre><code>[1] 47021</code></pre>
+
+sprintf(&quot;%d stations; surface temperature on %d (%.1f%%)&quot;,
+        nrow(starec), sum(!is.na(starec$temp_surf)),
+        100 * mean(!is.na(starec$temp_surf)))</code></pre>
+<pre><code>[1] &quot;47021 stations; surface temperature on 41051 (87.3%)&quot;</code></pre>
 </div>
 <div id="effort" class="section level1">
 <h1>Effort</h1>
