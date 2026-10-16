@@ -72,3 +72,21 @@ now come from the "Numbers for the text" section of `02_analysis.Rmd`.
 | Texas-Louisiana vs west Florida, June-July | 25.8 (15.7-42.9) vs 4.1 (1.2-8.9) | 26.5 (15.9-43.1) vs 4.3 (1.2-9.2) |
 | Larvae in the rates | 1473 | 1437 |
 | Larvae at 25-30 C vs all tows | 84.3% vs 69.1% | 84.5% vs 69.3% |
+
+## 6. Figures
+
+Figure code now follows the Fishery Bulletin guidelines: one 8 pt sans-serif size for all labels,
+panel letters in 11 pt bold Times New Roman inside the upper left, no grid lines or boxes around
+graphs, a north arrow and km scale bar on every map. Submission files are written to
+`output/figures/journal/` (PDF and 600 dpi TIFF, sized for a 7 in page):
+
+- Fig. 1 `fig1_distribution`: all records. Caption must define DWH (Deepwater Horizon wellhead),
+  the solid 200 m isobath and dotted 1000-3000 m isobaths, and symbol color and size.
+- Fig. 2 `fig2_june_july_maps`: A, June-July sorted deployments per 0.5 degree cell; B, larvae per
+  100 deployments. Caption must say grey cells had at least 10 deployments and no cobia.
+- Fig. 3 `fig3_season`: monthly shelf rate, 1982-2016, split by measured size composition.
+- Fig. 4 `fig4_size_depth`: length against station depth; caption must give the size-class colors
+  and the dashed 200 m line.
+- Supplementary Figs. 1-2: day and night by gear and size; surface temperature.
+- The catch-rate bar chart is replaced by Table 2.
+- Color: the guidelines want approved color figures in CMYK; convert at that stage.

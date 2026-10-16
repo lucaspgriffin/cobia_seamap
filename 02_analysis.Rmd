@@ -17,7 +17,7 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, comment = "
 
 ```{r packages}
 library(tidyverse); library(sf); library(terra); library(marmap)
-library(patchwork); library(rnaturalearth)
+library(patchwork); library(rnaturalearth); library(ggspatial)
 
 dir_derived <- "data/derived"; dir_fig <- "output/figures"
 dir.create(dir_fig, recursive = TRUE, showWarnings = FALSE)
@@ -34,9 +34,29 @@ SIZE_LEVELS <- c("Small (<5 mm)", "Medium (5-15 mm)", "Large (>15 mm)")
 SIZE_COLS   <- c("Small (<5 mm)" = "#D55E00", "Medium (5-15 mm)" = "#009E73",
                  "Large (>15 mm)" = "#0072B2")
 
-theme_set(theme_bw(base_size = 10) +
-  theme(panel.grid.minor = element_blank(), legend.position = "bottom",
-        legend.key.height = unit(10, "pt")))
+# Fishery Bulletin figure rules: one sans-serif size for every label, no bold or italic, no
+# background grid, no box around graphs (axis lines and ticks only), panel letters in bold Times
+# New Roman, slightly larger, inside the upper left of each panel.
+FONT_PT  <- 8
+TAG_PT   <- 11
+SANS     <- "Arial"
+SERIF    <- "Times New Roman"
+theme_set(theme_classic(base_size = FONT_PT, base_family = SANS) +
+  theme(text = element_text(size = FONT_PT, colour = "black"),
+        axis.text = element_text(size = FONT_PT, colour = "black"),
+        axis.title = element_text(size = FONT_PT), legend.text = element_text(size = FONT_PT),
+        legend.title = element_text(size = FONT_PT), strip.text = element_text(size = FONT_PT),
+        plot.title = element_text(size = FONT_PT, face = "plain"),
+        strip.background = element_blank(), axis.line = element_line(linewidth = 0.3),
+        axis.ticks = element_line(linewidth = 0.3), legend.position = "bottom",
+        legend.key.height = unit(8, "pt")))
+
+# A panel letter inside the upper-left corner, on a white box so it reads over any background.
+panel_letter <- function(lab) {
+  annotate("label", x = -Inf, y = Inf, label = lab, hjust = -0.25, vjust = 1.25,
+           family = SERIF, fontface = "bold", size = TAG_PT / .pt,
+           fill = "white", label.size = 0, label.padding = unit(1.5, "pt"))
+}
 ```
 
 Tables built by `01_data.Rmd`.
@@ -67,8 +87,19 @@ iso <- as.contour(rast(as.xyz(b), type = "xyz", crs = "EPSG:4326"),
 land <- ne_countries(scale = "medium", returnclass = "sf") %>% st_make_valid() %>%
   st_crop(st_bbox(c(xmin = BOX$lon[1], xmax = BOX$lon[2],
                     ymin = BOX$lat[1], ymax = BOX$lat[2]), crs = st_crs(4326)))
+# Maps keep a neat line; the journal asks for a north arrow and a scale bar in km on every map.
 map_frame <- list(coord_sf(xlim = BOX$lon, ylim = MAP_LAT, expand = FALSE), labs(x = NULL, y = NULL),
-                  theme(panel.grid = element_blank()))
+                  annotation_north_arrow(location = "tr", height = unit(18, "pt"),
+                                         width = unit(12, "pt"), pad_x = unit(4, "pt"),
+                                         pad_y = unit(4, "pt"),
+                                         style = north_arrow_orienteering(text_size = FONT_PT,
+                                                                          text_family = SANS)),
+                  annotation_scale(location = "br", unit_category = "metric", width_hint = 0.2,
+                                   text_cex = FONT_PT / 12, text_family = SANS,
+                                   height = unit(3, "pt"), pad_x = unit(6, "pt"),
+                                   pad_y = unit(6, "pt"), bar_cols = c("black", "white")),
+                  theme(panel.grid = element_blank(), axis.line = element_blank(),
+                        panel.border = element_rect(fill = NA, colour = "black", linewidth = 0.3)))
 ```
 
 Catch rates divide by effort drawn from the same pool as the numerator, which here is sorted bongo
@@ -107,7 +138,7 @@ p_dist <- ggplot() +
           linetype = "dotted") +
   geom_sf(data = land, fill = "grey85", colour = "grey40", linewidth = 0.2) +
   geom_point(data = DWH, aes(lon, lat), shape = 8, size = 2.6, stroke = 0.9) +
-  annotate("text", x = DWH$lon + 0.3, y = DWH$lat - 0.45, label = "DWH", size = 2.9, hjust = 0) +
+  annotate("text", x = DWH$lon + 0.3, y = DWH$lat - 0.45, label = "DWH", size = FONT_PT / .pt, family = SANS, hjust = 0) +
   # smallest drawn last so they are not buried under the commoner medium tows
   geom_point(data = gulf %>% filter(!is.na(size_class)) %>%
                arrange(desc(as.integer(size_class)), desc(n_total)),
@@ -172,7 +203,7 @@ p_season <- cpue %>% select(month, month_lab, per_100) %>% inner_join(mix, by = 
                     guide = guide_legend(reverse = TRUE)) +
   scale_x_discrete(labels = substr(month.abb, 1, 1), drop = FALSE) +
   theme(legend.position = "right", legend.key.size = unit(8, "pt"),
-        legend.text = element_text(size = 7)) +
+        legend.text = element_text(size = FONT_PT)) +
   labs(x = NULL, y = "Cobia larvae per 100 sorted\nshelf tows, 1982-2016")
 p_season
 ```
@@ -203,7 +234,7 @@ sprintf("cells with >=10 June-July tows: %d; of those with no cobia: %d",
 frame <- list(geom_sf(data = filter(iso, depth_m == 200), colour = "grey35", linewidth = 0.3),
               geom_sf(data = land, fill = "grey85", colour = "grey40", linewidth = 0.2),
               map_frame, theme(panel.background = element_rect(fill = "white")),
-              theme(plot.title = element_text(size = 8.5, face = "plain")))
+              theme(plot.title = element_text(size = FONT_PT, face = "plain")))
 p_eff <- ggplot() + geom_tile(data = cells, aes(cx, cy, fill = n_tows)) +
   scale_fill_viridis_c(trans = "log10", option = "mako", direction = -1,
                        name = "Sorted June-July\ndeployments", breaks = c(1, 10, 100)) +
@@ -258,7 +289,7 @@ p_bar <- ggplot(reg, aes(reorder(str_remove(region, " shelf"), -rate), rate)) +
   geom_col(fill = "#0072B2", colour = "grey20", linewidth = 0.2, width = 0.6) +
   geom_errorbar(aes(ymin = lo, ymax = hi), width = 0.15, linewidth = 0.4) +
   geom_text(aes(y = hi, label = sprintf("%d tows\n%.0f larvae", tows, larvae)),
-            vjust = -0.3, size = 2.5, lineheight = 0.95) +
+            vjust = -0.3, size = FONT_PT / .pt, family = SANS, lineheight = 0.95) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.28))) +
   labs(x = NULL, y = "Larvae per 100 shelf tows,\nJune-July 1982-2016")
 p_bar
@@ -331,13 +362,15 @@ takes them more by night. That is what vertical movement between the gears' dept
 The bongo large-larva cell is 0.01 against 0.05 per 100 tows, which is noise.
 
 ```{r explore_diel, fig.width = 6, fig.height = 3.2}
-diel %>% pivot_longer(c(day, night), names_to = "tod", values_to = "per_100") %>%
+p_diel <- diel %>% pivot_longer(c(day, night), names_to = "tod", values_to = "per_100") %>%
   ggplot(aes(size, per_100, fill = tod)) +
   geom_col(position = "dodge", colour = "grey20", linewidth = 0.2, width = 0.7) +
   facet_wrap(~ gear, scales = "free_y") +
-  scale_fill_manual(values = c(day = "#E8C547", night = "#2F4858"), name = NULL) +
+  scale_fill_manual(values = c(day = "#E8C547", night = "#2F4858"), name = NULL,
+                    labels = c(day = "Day", night = "Night")) +
   scale_x_discrete(labels = c("<5", "5-15", ">15")) +
   labs(x = "Larval length (mm)", y = "Measured larvae per 100 tows")
+p_diel
 ```
 
 Daytime sampling on the early trawl surveys is a documented bias, corrected around 1995. Across
@@ -386,14 +419,15 @@ bind_rows(
 ```
 
 ```{r explore_temp, fig.width = 5.5, fig.height = 3.2}
-bind_rows(
+p_temp <- bind_rows(
   tibble(set = "All sorted tows", t = temp_tows$temp_surf),
   tibble(set = "Larvae",          t = temp_pos$temp_surf)) %>%
   ggplot(aes(t, after_stat(density), fill = set)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.55,
                  colour = "grey20", linewidth = 0.2) +
   scale_fill_manual(values = c("All sorted tows" = "grey60", "Larvae" = "#C1442E"), name = NULL) +
-  labs(x = "Surface temperature (C)", y = "Density")
+  labs(x = "Surface temperature (°C)", y = "Density")
+p_temp
 ```
 
 # Results figure
@@ -402,7 +436,47 @@ bind_rows(
 (p_dist) / (p_eff | p_rate) / (p_season | p_bar | p_size) +
   plot_layout(heights = c(1.9, 1.5, 1.05)) +
   plot_annotation(tag_levels = "A") &
-  theme(plot.tag = element_text(size = 11, face = "bold"))
+  theme(plot.tag = element_text(size = TAG_PT, face = "bold", family = SERIF))
+```
+
+# Figures for submission
+
+One file per figure, as the journal asks, in PDF and as 600 dpi TIFF. Widths are set for the
+printed page (full width 7 in, one column 3.5 in) so that 8 pt labels print at 8 pt. The catch-rate
+bar chart is left out because Table 2 carries the same comparison; day and night and temperature
+are supplementary. Captions must spell out DWH (Deepwater Horizon wellhead) and the isobaths.
+
+```{r journal-figures}
+dir_journal <- file.path(dir_fig, "journal")
+dir.create(dir_journal, showWarnings = FALSE)
+# The macOS PDF device embeds system fonts (Arial, Times New Roman); the CRAN build's cairo_pdf
+# does not find them there. Elsewhere cairo_pdf does.
+pdf_device <- if (capabilities("aqua")) {
+  function(filename, width, height, bg = "white", ...)
+    grDevices::quartz(type = "pdf", file = filename, width = width, height = height, bg = bg)
+} else grDevices::cairo_pdf
+save_fig <- function(p, name, w, h) {
+  ggsave(file.path(dir_journal, paste0(name, ".pdf")), p, width = w, height = h,
+         device = pdf_device)
+  ggsave(file.path(dir_journal, paste0(name, ".tif")), p, width = w, height = h, dpi = 600,
+         device = ragg::agg_tiff, compression = "lzw")
+}
+diel_letters <- tibble(gear = c("Bongo", "Neuston"), lab = c("A", "B"))
+
+save_fig(p_dist + theme(legend.box = "vertical", legend.box.just = "left",
+                         legend.spacing.y = unit(2, "pt"), plot.margin = margin(2, 12, 2, 2)),
+         "fig1_distribution", 7, 5)   # legends stacked to fit the 7 in page width
+save_fig((p_eff + panel_letter("A")) / (p_rate + panel_letter("B")), "fig2_june_july_maps", 7, 7.6)
+save_fig(p_season, "fig3_season", 5, 2.6)
+save_fig(p_size, "fig4_size_depth", 3.5, 2.8)
+save_fig(p_diel + geom_label(data = diel_letters, aes(x = -Inf, y = Inf, label = lab),
+                             inherit.aes = FALSE, hjust = -0.25, vjust = 1.25, family = SERIF,
+                             fontface = "bold", size = TAG_PT / .pt, fill = "white",
+                             label.size = 0) +
+           theme(strip.text = element_text(hjust = 0.5)),
+         "suppl_fig1_day_night", 7, 3)
+save_fig(p_temp, "suppl_fig2_temperature", 3.5, 2.8)
+list.files(dir_journal)
 ```
 
 # Numbers for the text

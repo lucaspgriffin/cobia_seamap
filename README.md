@@ -44,7 +44,8 @@ used rather than hidden in a sourced file.
 
 Figures land in `output/figures/`, `main_` for results and `explore_` for checks.
 
-tidyverse, sf, terra, marmap, patchwork, rnaturalearth, rmarkdown.
+tidyverse, sf, terra, marmap, patchwork, rnaturalearth, ggspatial, ragg, rmarkdown. Journal figures
+land in `output/figures/journal/` as PDF and 600 dpi TIFF.
 
 ## Data
 
