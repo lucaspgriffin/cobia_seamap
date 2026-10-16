@@ -82,11 +82,15 @@ graphs, a north arrow and km scale bar on every map. Submission files are writte
 
 - Fig. 1 `fig1_distribution`: all records. Caption must define DWH (Deepwater Horizon wellhead),
   the solid 200 m isobath and dotted 1000-3000 m isobaths, and symbol color and size.
-- Fig. 2 `fig2_june_july_maps`: A, June-July sorted deployments per 0.5 degree cell; B, larvae per
+- Fig. 2 `fig2_season`: monthly shelf rate, 1982-2016, split by measured size composition.
+- Fig. 3 `fig3_june_july_maps`: A, June-July sorted deployments per 0.5 degree cell; B, larvae per
   100 deployments. Caption must say grey cells had at least 10 deployments and no cobia.
-- Fig. 3 `fig3_season`: monthly shelf rate, 1982-2016, split by measured size composition.
-- Fig. 4 `fig4_size_depth`: length against station depth; caption must give the size-class colors
+- Fig. 4 `fig4_shelf_rates`: Texas-Louisiana vs west Florida, June-July, with 95% CIs.
+  **Candidate to drop:** repeats Table 2.
+- Fig. 5 `fig5_size_depth`: length against station depth; caption must give the size-class colors
   and the dashed 200 m line.
-- Supplementary Figs. 1-2: day and night by gear and size; surface temperature.
-- The catch-rate bar chart is replaced by Table 2.
+- Fig. 6 `fig6_day_night`: day and night by gear and size. **Candidate to drop:** repeats Table 3.
+- Fig. 7 `fig7_temperature`: surface temperature of larvae vs all tows sampled.
+- Figure limit: no more than 1 figure per 4 pages of text. 7 figures needs about 28 pages; at
+  20-24 pages, drop Figs. 4 and 6 (their tables carry the same numbers).
 - Color: the guidelines want approved color figures in CMYK; convert at that stage.

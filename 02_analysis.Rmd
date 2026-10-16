@@ -442,9 +442,10 @@ p_temp
 # Figures for submission
 
 One file per figure, as the journal asks, in PDF and as 600 dpi TIFF. Widths are set for the
-printed page (full width 7 in, one column 3.5 in) so that 8 pt labels print at 8 pt. The catch-rate
-bar chart is left out because Table 2 carries the same comparison; day and night and temperature
-are supplementary. Captions must spell out DWH (Deepwater Horizon wellhead) and the isobaths.
+printed page (full width 7 in, one column 3.5 in) so that 8 pt labels print at 8 pt. All seven
+figures are exported, numbered in the order the Results take them up. Figures 4 and 6 repeat
+Tables 2 and 3 and are candidates to drop if the text runs short of the 1-figure-per-4-pages limit.
+Captions must spell out DWH (Deepwater Horizon wellhead) and the isobaths.
 
 ```{r journal-figures}
 dir_journal <- file.path(dir_fig, "journal")
@@ -466,16 +467,17 @@ diel_letters <- tibble(gear = c("Bongo", "Neuston"), lab = c("A", "B"))
 save_fig(p_dist + theme(legend.box = "vertical", legend.box.just = "left",
                          legend.spacing.y = unit(2, "pt"), plot.margin = margin(2, 12, 2, 2)),
          "fig1_distribution", 7, 5)   # legends stacked to fit the 7 in page width
-save_fig((p_eff + panel_letter("A")) / (p_rate + panel_letter("B")), "fig2_june_july_maps", 7, 7.6)
-save_fig(p_season, "fig3_season", 5, 2.6)
-save_fig(p_size, "fig4_size_depth", 3.5, 2.8)
+save_fig(p_season, "fig2_season", 5, 2.6)
+save_fig((p_eff + panel_letter("A")) / (p_rate + panel_letter("B")), "fig3_june_july_maps", 7, 7.6)
+save_fig(p_bar, "fig4_shelf_rates", 3.5, 3)                 # repeats Table 2; candidate to drop
+save_fig(p_size, "fig5_size_depth", 3.5, 2.8)
 save_fig(p_diel + geom_label(data = diel_letters, aes(x = -Inf, y = Inf, label = lab),
                              inherit.aes = FALSE, hjust = -0.25, vjust = 1.25, family = SERIF,
                              fontface = "bold", size = TAG_PT / .pt, fill = "white",
                              label.size = 0) +
            theme(strip.text = element_text(hjust = 0.5)),
-         "suppl_fig1_day_night", 7, 3)
-save_fig(p_temp, "suppl_fig2_temperature", 3.5, 2.8)
+         "fig6_day_night", 7, 3)   # repeats Table 3; candidate to drop
+save_fig(p_temp, "fig7_temperature", 3.5, 2.8)
 list.files(dir_journal)
 ```
 

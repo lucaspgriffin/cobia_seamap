@@ -2439,9 +2439,10 @@ p_temp</code></pre>
 <h1>Figures for submission</h1>
 <p>One file per figure, as the journal asks, in PDF and as 600 dpi TIFF.
 Widths are set for the printed page (full width 7 in, one column 3.5 in)
-so that 8 pt labels print at 8 pt. The catch-rate bar chart is left out
-because Table 2 carries the same comparison; day and night and
-temperature are supplementary. Captions must spell out DWH (Deepwater
+so that 8 pt labels print at 8 pt. All seven figures are exported,
+numbered in the order the Results take them up. Figures 4 and 6 repeat
+Tables 2 and 3 and are candidates to drop if the text runs short of the
+1-figure-per-4-pages limit. Captions must spell out DWH (Deepwater
 Horizon wellhead) and the isobaths.</p>
 <pre class="r"><code>dir_journal &lt;- file.path(dir_fig, &quot;journal&quot;)
 dir.create(dir_journal, showWarnings = FALSE)
@@ -2462,23 +2463,25 @@ diel_letters &lt;- tibble(gear = c(&quot;Bongo&quot;, &quot;Neuston&quot;), lab 
 save_fig(p_dist + theme(legend.box = &quot;vertical&quot;, legend.box.just = &quot;left&quot;,
                          legend.spacing.y = unit(2, &quot;pt&quot;), plot.margin = margin(2, 12, 2, 2)),
          &quot;fig1_distribution&quot;, 7, 5)   # legends stacked to fit the 7 in page width
-save_fig((p_eff + panel_letter(&quot;A&quot;)) / (p_rate + panel_letter(&quot;B&quot;)), &quot;fig2_june_july_maps&quot;, 7, 7.6)
-save_fig(p_season, &quot;fig3_season&quot;, 5, 2.6)
-save_fig(p_size, &quot;fig4_size_depth&quot;, 3.5, 2.8)
+save_fig(p_season, &quot;fig2_season&quot;, 5, 2.6)
+save_fig((p_eff + panel_letter(&quot;A&quot;)) / (p_rate + panel_letter(&quot;B&quot;)), &quot;fig3_june_july_maps&quot;, 7, 7.6)
+save_fig(p_bar, &quot;fig4_shelf_rates&quot;, 3.5, 3)                 # repeats Table 2; candidate to drop
+save_fig(p_size, &quot;fig5_size_depth&quot;, 3.5, 2.8)
 save_fig(p_diel + geom_label(data = diel_letters, aes(x = -Inf, y = Inf, label = lab),
                              inherit.aes = FALSE, hjust = -0.25, vjust = 1.25, family = SERIF,
                              fontface = &quot;bold&quot;, size = TAG_PT / .pt, fill = &quot;white&quot;,
                              label.size = 0) +
            theme(strip.text = element_text(hjust = 0.5)),
-         &quot;suppl_fig1_day_night&quot;, 7, 3)
-save_fig(p_temp, &quot;suppl_fig2_temperature&quot;, 3.5, 2.8)
+         &quot;fig6_day_night&quot;, 7, 3)   # repeats Table 3; candidate to drop
+save_fig(p_temp, &quot;fig7_temperature&quot;, 3.5, 2.8)
 list.files(dir_journal)</code></pre>
-<pre><code> [1] &quot;fig1_distribution.pdf&quot;      &quot;fig1_distribution.tif&quot;     
- [3] &quot;fig2_june_july_maps.pdf&quot;    &quot;fig2_june_july_maps.tif&quot;   
- [5] &quot;fig3_season.pdf&quot;            &quot;fig3_season.tif&quot;           
- [7] &quot;fig4_size_depth.pdf&quot;        &quot;fig4_size_depth.tif&quot;       
- [9] &quot;suppl_fig1_day_night.pdf&quot;   &quot;suppl_fig1_day_night.tif&quot;  
-[11] &quot;suppl_fig2_temperature.pdf&quot; &quot;suppl_fig2_temperature.tif&quot;</code></pre>
+<pre><code> [1] &quot;fig1_distribution.pdf&quot;   &quot;fig1_distribution.tif&quot;  
+ [3] &quot;fig2_season.pdf&quot;         &quot;fig2_season.tif&quot;        
+ [5] &quot;fig3_june_july_maps.pdf&quot; &quot;fig3_june_july_maps.tif&quot;
+ [7] &quot;fig4_shelf_rates.pdf&quot;    &quot;fig4_shelf_rates.tif&quot;   
+ [9] &quot;fig5_size_depth.pdf&quot;     &quot;fig5_size_depth.tif&quot;    
+[11] &quot;fig6_day_night.pdf&quot;      &quot;fig6_day_night.tif&quot;     
+[13] &quot;fig7_temperature.pdf&quot;    &quot;fig7_temperature.tif&quot;   </code></pre>
 </div>
 <div id="numbers-for-the-text" class="section level1">
 <h1>Numbers for the text</h1>
