@@ -41,6 +41,28 @@ Methods to update:
   substring. The station key is now read directly. None held cobia.
 - Bootstrap intervals now take both limits from one set of 2000 resamples (previously two).
 
+## 4. Notes for tables
+
+- Day/night by gear and size: the bongo large-larva row (0.01 day vs 0.05 night per 100
+  deployments) rests on very few larvae. Keep it with a footnote saying so; do not interpret the
+  ratio.
+
+## 5. Supporting numbers now in the code
+
+These numbers are in the draft Table 2 and Results. They were first computed in a review script and
+now come from the "Numbers for the text" section of `02_analysis.Rmd`.
+
+- Table 2 robustness rows (June-July shelf, 1982-2016): cruise-resampled 95% CIs (13.5-45.5 vs
+  0.9-10.1); without the 2 largest catches (18.3 vs 4.3); 1995-2016 only (39.7 vs 6.0); diurnal
+  (5.7 vs 0.5); nocturnal (76.6 vs 9.6); neuston only (52.7 vs 8.8); bongo only (2.2 vs 0.3);
+  share of nocturnal deployments (29% vs 42%).
+- Rates by gear, all effort: neuston 8.58 vs bongo 0.95 per 100; 2.69% vs 0.67% of deployments
+  with cobia; neuston share of larvae in the rates 90.7%.
+- Comparisons with Ditty and Shaw (1992): 98.5% of larvae in May-September (85.7% June-September);
+  84.7% at stations <100 m; larva-weighted median station depth 42 m; 141 larvae in 83 records
+  beyond 200 m.
+- Overall day vs night: neuston 16.5 vs 2.0, bongo 1.0 vs 0.9 per 100.
+
 ## Results after all three changes
 
 | | Original | Now |

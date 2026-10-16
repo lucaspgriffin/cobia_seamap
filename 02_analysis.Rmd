@@ -405,6 +405,81 @@ bind_rows(
   theme(plot.tag = element_text(size = 11, face = "bold"))
 ```
 
+# Numbers for the text
+
+Figures quoted in the Results that are not shown elsewhere in this document.
+
+## Catch by gear
+
+All standard deployments, 1982-2024.
+
+```{r text-gear}
+all_tows <- effort %>% select(v_c_p, gear, night) %>%
+  left_join(rates %>% group_by(v_c_p, gear) %>% summarise(n = sum(n_total), .groups = "drop"),
+            by = c("v_c_p", "gear")) %>%
+  mutate(n = coalesce(n, 0))
+all_tows %>% group_by(gear) %>%
+  summarise(tows = n(), larvae = sum(n), per_100 = round(100 * mean(n), 2),
+            pct_tows_with = round(100 * mean(n > 0), 2), .groups = "drop") %>%
+  mutate(pct_of_larvae = round(100 * larvae / sum(larvae), 1))
+all_tows %>% filter(!is.na(night)) %>%
+  group_by(gear, night) %>% summarise(tows = n(), per_100 = round(100 * mean(n), 1), .groups = "drop")
+sprintf("deployments with cobia: %d of %d", sum(all_tows$n > 0), nrow(all_tows))
+```
+
+## Against Ditty and Shaw (1992)
+
+They report 98% of larvae in June-September and 75% at stations under 100 m (median 50 m). Every
+larva in the study box counts here, as theirs did, so these are shares of catch, not rates.
+
+```{r text-ditty-shaw}
+gulf %>% summarise(
+  larvae = sum(n_total),
+  pct_may_sep = round(100 * sum(n_total[month %in% 5:9]) / larvae, 1),
+  pct_jun_sep = round(100 * sum(n_total[month %in% 6:9]) / larvae, 1),
+  pct_under_100m = round(100 * sum(n_total[sta_depth_m < 100]) / larvae, 1),
+  median_depth_m = round(median(rep(sta_depth_m, n_total))),
+  records_off_shelf = sum(sta_depth_m > SHELF_M),
+  larvae_off_shelf = sum(n_total[sta_depth_m > SHELF_M]))
+count(gulf, month, wt = n_total, name = "larvae")
+```
+
+## The shelf comparison, re-cut
+
+The June-July comparison of the two shelves, recomputed with the two largest catches removed, for
+1995-2016 alone, by time of day and by gear. Intervals here resample whole cruises, since tows on
+one cruise share weather, water and crew.
+
+```{r text-shelf-robustness}
+shelf_tows <- peak_eff %>% filter(!is.na(region), year %in% SERIES) %>%
+  select(v_c_p, gear, region, year, night) %>%
+  left_join(tow_catch, by = c("v_c_p", "gear" = "gear_class")) %>%
+  mutate(n = coalesce(n, 0), cruise = substr(v_c_p, 1, 5))   # vessel + cruise number
+
+shelf_rate <- function(d, case) d %>% group_by(region) %>%
+  summarise(rate = 100 * mean(n), .groups = "drop") %>%
+  pivot_wider(names_from = region, values_from = rate) %>%
+  transmute(case, tx_la = round(`Texas-Louisiana shelf`, 1), w_fl = round(`West Florida shelf`, 1),
+            ratio = round(`Texas-Louisiana shelf` / `West Florida shelf`, 1))   # from unrounded rates
+bind_rows(
+  shelf_rate(shelf_tows, "all"),
+  shelf_rate(filter(shelf_tows, rank(-n, ties.method = "first") > 2), "without the 2 largest catches"),
+  shelf_rate(filter(shelf_tows, year >= 1995), "1995-2016"),
+  shelf_rate(filter(shelf_tows, night %in% FALSE), "day"),
+  shelf_rate(filter(shelf_tows, night %in% TRUE), "night"),
+  shelf_rate(filter(shelf_tows, gear == "Neuston"), "neuston"),
+  shelf_rate(filter(shelf_tows, gear == "Bongo"), "bongo"))
+
+set.seed(7)
+shelf_tows %>% group_by(region) %>%
+  summarise(cruises = n_distinct(cruise), pct_night = round(100 * mean(night, na.rm = TRUE)),
+            ci = list(quantile(replicate(2000, {
+              by_cruise <- split(n, cruise)
+              100 * mean(unlist(by_cruise[sample(names(by_cruise), replace = TRUE)]))
+            }), c(0.025, 0.975))), .groups = "drop") %>%
+  mutate(lo = round(map_dbl(ci, 1), 1), hi = round(map_dbl(ci, 2), 1), .keep = "unused")
+```
+
 # Checks
 
 Each block states what should be true, computes it, and shows both sides so the comparison is
