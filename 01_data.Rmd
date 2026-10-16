@@ -70,13 +70,33 @@ Positions are degrees and minutes in separate columns. `DEPTH_SSTA` is in fathom
 taken, so values outside 5-36 degrees are set to missing rather than treated as cold water. The
 station table holds no salinity field.
 
+`TIME_MIL` is clock time in whichever zone `TIME_ZN` names. Early cruises mostly logged local
+Central or Eastern time; from about 2000 nearly every station is logged in GMT. Read as local
+throughout, a 3 pm tow logged after 2000 becomes 8 pm. Each time is converted to GMT, and a station
+is night when the sun was below the horizon at that time and position. Zone 9 ("other") and
+impossible times are left missing.
+
 ```{r stations}
 TEMP_OK <- c(5, 36)                                  # outside this range TEMP_SSURF is a sentinel
+TZ_OFFSET <- c("1" = -5, "2" = -4, "3" = -6, "4" = -5, "5" = -4, "6" = -3, "8" = 0)  # hours from GMT
+
+# Solar elevation in degrees (NOAA general solar position approximation).
+sun_altitude <- function(date, gmt_hour, lat, lon) {
+  g    <- 2 * pi / 365 * (yday(date) - 1 + (gmt_hour - 12) / 24)
+  decl <- 0.006918 - 0.399912 * cos(g) + 0.070257 * sin(g) - 0.006758 * cos(2 * g) +
+          0.000907 * sin(2 * g) - 0.002697 * cos(3 * g) + 0.00148 * sin(3 * g)
+  eqt  <- 229.18 * (0.000075 + 0.001868 * cos(g) - 0.032077 * sin(g) -
+                    0.014615 * cos(2 * g) - 0.040849 * sin(2 * g))
+  hour_angle <- ((gmt_hour * 60 + eqt + 4 * lon) / 4 - 180) * pi / 180
+  asin(sin(lat * pi / 180) * sin(decl) +
+       cos(lat * pi / 180) * cos(decl) * cos(hour_angle)) * 180 / pi
+}
 
 starec <- read_seamap("STAREC.csv") %>%
   transmute(v_c_p    = V_C_P,
             date     = as.Date(substr(MO_DAY_YR, 1, 10)),
             time_mil = TIME_MIL,
+            time_zn  = TIME_ZN,
             gears    = GEARS,
             lat = as.numeric(S_LATD) + as.numeric(S_LATM) / 60,
             lon = (as.numeric(S_LOND) + as.numeric(S_LONM) / 60) * if_else(S_LONH == "W", -1, 1),
@@ -85,11 +105,18 @@ starec <- read_seamap("STAREC.csv") %>%
   mutate(temp_surf = if_else(temp_surf >= TEMP_OK[1] & temp_surf <= TEMP_OK[2], temp_surf, NA_real_)) %>%
   filter(!is.na(date), !is.na(lat), !is.na(lon)) %>%
   arrange(v_c_p, date) %>%
-  distinct(v_c_p, .keep_all = TRUE)        # V_C_P should be unique; keep the first if not
+  distinct(v_c_p, .keep_all = TRUE) %>%    # V_C_P should be unique; keep the first if not
+  mutate(hh = suppressWarnings(as.integer(substr(str_pad(time_mil, 4, "left", "0"), 1, 2))),
+         mm = suppressWarnings(as.integer(substr(str_pad(time_mil, 4, "left", "0"), 3, 4))),
+         gmt_hour = if_else(hh <= 23 & mm <= 59,
+                            (hh + mm / 60 - TZ_OFFSET[time_zn]) %% 24, NA_real_),
+         night = sun_altitude(date, gmt_hour, lat, lon) < 0) %>%
+  select(-hh, -mm)
 
 sprintf("%d stations; surface temperature on %d (%.1f%%)",
         nrow(starec), sum(!is.na(starec$temp_surf)),
         100 * mean(!is.na(starec$temp_surf)))
+count(starec, time_zn, night)
 ```
 
 # Effort
@@ -97,6 +124,12 @@ sprintf("%d stations; surface temperature on %d (%.1f%%)",
 Gear codes from Section II of the survey documentation. `SORT_IST` records whether a sample was
 sorted; only sorted samples could have yielded an identified larva, so they are the pool any catch
 rate divides by.
+
+Only the standard SEAMAP gears count as effort, as the survey documentation defines them: 61 or 60
+cm bongo with 0.333 mm mesh (gear 01 or 17, mesh 03) and single or double neuston with 0.947 mm
+mesh (gear 03 or 08, mesh 09). Bongo and neuston frames fished with other meshes or sizes are
+labelled non-standard, so they stay on the distribution map but drop out of every rate. Among cobia
+that removes 36 larvae, 19 from a bongo and 17 from a neuston with mesh 05.
 
 ```{r effort}
 GEAR <- c("01" = "Bongo", "17" = "Bongo", "11" = "Bongo", "14" = "Bongo", "05" = "Bongo",
@@ -107,8 +140,14 @@ GEAR <- c("01" = "Bongo", "17" = "Bongo", "11" = "Bongo", "14" = "Bongo", "05" =
 SORTED <- c("1", "2", "4", "D")
 
 istrwk <- read_seamap("ISTRWK.csv") %>%
-  transmute(v_c_p = substr(V_C_P_S, 1, 10), v_c_p_s = V_C_P_S,
-            gear = GEAR[GEAR_ICD], sort_ist = SORT_IST, vol_filt_m3 = as.numeric(VOL_FILT))
+  transmute(v_c_p = V_C_P, v_c_p_s = V_C_P_S,   # V_C_P is 9 characters on a few stations
+            gear = GEAR[GEAR_ICD], sort_ist = SORT_IST, vol_filt_m3 = as.numeric(VOL_FILT),
+            standard = (GEAR_ICD %in% c("01", "17") & MESH_ICD == "03") |
+                       (GEAR_ICD %in% c("03", "08") & MESH_ICD == "09")) %>%
+  mutate(gear = if_else(gear %in% c("Bongo", "Neuston") & !standard,
+                        paste(gear, "(non-standard)"), gear)) %>%
+  select(-standard)
+count(istrwk, gear, name = "samples")
 
 # One deployment per station per gear class: a bongo pair and a double neuston frame each count once.
 effort <- istrwk %>%
@@ -118,8 +157,6 @@ effort <- istrwk %>%
   filter(lon >= BOX$lon[1], lon <= BOX$lon[2], lat >= BOX$lat[1], lat <= BOX$lat[2]) %>%
   mutate(year  = year(date),
          month = month(date),
-         hour  = suppressWarnings(as.integer(substr(str_pad(time_mil, 4, "left", "0"), 1, 2))),
-         night = if_else(is.na(hour) | hour > 23, NA, hour >= 20 | hour < 6),
          region = case_when(
            sta_depth_m <= 0 | sta_depth_m > 200                    ~ NA_character_,
            lat >= 26 & lat <= 30.5 & lon >= -98 & lon < -88        ~ "Texas-Louisiana shelf",
@@ -201,8 +238,6 @@ records <- catch %>%
   inner_join(starec, by = "v_c_p") %>%
   mutate(year  = year(date),
          month = month(date),
-         hour  = suppressWarnings(as.integer(substr(str_pad(time_mil, 4, "left", "0"), 1, 2))),
-         night = if_else(is.na(hour) | hour > 23, NA, hour >= 20 | hour < 6),
          has_small = coalesce(has_small, FALSE),
          region = case_when(
            sta_depth_m <= 0 | sta_depth_m > 200              ~ NA_character_,

@@ -235,7 +235,8 @@ reg <- peak_eff %>% filter(!is.na(region), year %in% SERIES) %>%
   mutate(n = coalesce(n, 0)) %>%
   group_by(region) %>%
   summarise(tows = n(), larvae = sum(n), rate = 100 * mean(n), pct_tows_with = 100 * mean(n > 0),
-            lo = boot_ci(n)[1], hi = boot_ci(n)[2], .groups = "drop")
+            ci = list(boot_ci(n)), .groups = "drop") %>%
+  mutate(lo = map_dbl(ci, 1), hi = map_dbl(ci, 2), .keep = "unused")   # both limits from one set of resamples
 write_csv(reg, file.path(dir_derived, "shelf_comparison.csv"))
 reg
 ```
@@ -607,4 +608,21 @@ effort %>% filter(month %in% PEAK, sta_depth_m > 0, sta_depth_m <= SHELF_M) %>%
   full_join(tibble(year = 2013:max(gulf$year)), by = "year") %>%
   arrange(year) %>%
   mutate(june_july_shelf_tows = coalesce(june_july_shelf_tows, 0L))
+```
+
+## Station times are read in their recorded zone
+
+`TIME_ZN` shifts from local time to GMT over the series. If the conversion is right, the share of
+tows classed as night should hold roughly steady from decade to decade rather than jump when the
+logging convention changes.
+
+```{r check-time-zone}
+effort %>% mutate(decade = 10 * (year %/% 10),
+                  zone = recode(as.character(time_zn), "1" = "EST", "2" = "EDT", "3" = "CST", "4" = "CDT",
+                                "5" = "AST", "6" = "ADT", "8" = "GMT", .default = "other")) %>%
+  group_by(decade) %>%
+  summarise(tows = n(), pct_gmt = round(100 * mean(zone == "GMT")),
+            pct_local = round(100 * mean(zone %in% c("EST", "EDT", "CST", "CDT", "AST", "ADT"))),
+            pct_night = round(100 * mean(night, na.rm = TRUE)),
+            no_time = sum(is.na(night)), .groups = "drop")
 ```
