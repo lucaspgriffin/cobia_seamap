@@ -1667,9 +1667,9 @@ rates, which come later.</p>
 </tbody>
 </table>
 </div>
-<p>Catches are very uneven. The median tow held one larva and 79% held
-one or two, but a neuston tow off the Mississippi River delta on 8 June
-2012 held 232, and the next station sampled that day held 38. That whole
+<p>Among tows with cobia, the median held one larva and 79% held one or
+two, but a neuston tow off the Mississippi River delta on 8 June 2012
+held 232, and the next station sampled that day held 38. That whole
 sample was sorted, so the count was not inflated by an aliquot
 correction. Symbol sizes are binned, because on a continuous scale that
 one tow would make every other tow look small.</p>
@@ -1919,10 +1919,10 @@ p_eff | p_rate</code></pre>
 matched to effort by both station and gear, because matching by station
 alone would count a tow’s larvae in both the bongo and the neuston rows
 and double the rate. Confidence intervals come from resampling tows with
-replacement 2000 times (a bootstrap). Larvae are caught in clumps, with
-most tows empty and a few holding many. A Poisson interval assumes each
-larva is caught independently, so it would give intervals that are much
-too narrow.</p>
+replacement 2000 times (a bootstrap). In June and July, 219 of the 3298
+Texas–Louisiana tows caught cobia, and one tow held 232 of the 874
+larvae. A Poisson interval treats each larva as an independent catch, so
+with counts like these it gives intervals that are much too narrow.</p>
 <pre class="r"><code>tow_catch &lt;- peak_recs %&gt;% filter(year %in% SERIES) %&gt;%
   mutate(gear_class = if_else(gear == &quot;Neuston&quot;, &quot;Neuston&quot;, &quot;Bongo&quot;)) %&gt;%
   group_by(v_c_p, gear_class) %&gt;% summarise(n = sum(n_total), .groups = &quot;drop&quot;)
