@@ -337,8 +337,10 @@ map_dfr(c(3, 3.2, 3.5, 4, 4.5, 5), function(cut) {
 
 Pooled rates run higher at night, which could be larvae avoiding the net in daylight or larvae
 sitting deeper by day. The two make opposite predictions. Avoidance should bite hardest on the
-largest larvae, which see better and swim harder. Vertical movement should push catch between the
-gears, since neuston fishes the top half-metre and bongo obliquely through the column.
+largest larvae, which see better and swim harder. Vertical movement should show in one gear and not
+the other. Neuston fishes only the top half-metre, so larvae rising to the surface at night raise its
+catch. Bongo fishes obliquely through the column and takes them at either depth, so its catch should
+hold steady.
 
 ```{r diel-table}
 diel <- lengths %>%
@@ -356,10 +358,11 @@ write_csv(diel, file.path(dir_derived, "diel_by_gear_size.csv"))
 diel
 ```
 
-The neuston night:day ratio falls with larval size, which is backwards for net avoidance. And the
-two gears move in opposite directions: bongo takes the smaller classes more by day while neuston
-takes them more by night. That is what vertical movement between the gears' depths looks like.
-The bongo large-larva cell is 0.01 against 0.05 per 100 tows, which is noise.
+Neuston takes 3-9 times more larvae at night, while bongo takes small and medium larvae at about the
+same rate by day and by night (ratios 1.09 and 1.07). That is what vertical movement into the
+surface layer looks like. The neuston night:day ratio also falls with larval size, from 8.8 to 3.3,
+which is backwards for net avoidance. The bongo large-larva cell is 0.01 against 0.05 per 100 tows,
+which is noise.
 
 ```{r explore_diel, fig.width = 6, fig.height = 3.2}
 p_diel <- diel %>% pivot_longer(c(day, night), names_to = "tod", values_to = "per_100") %>%
@@ -374,10 +377,11 @@ p_diel
 ```
 
 Daytime sampling on the early trawl surveys is a documented bias, corrected around 1995. Across
-that break the daytime rate rises from 1.2 to 34.3 larvae per 100 tows while the night rate moves
-only from 18.2 to 29.8, and a real change in abundance would move both alike, which points at the
-early daytime samples rather than at the ocean. No interannual trend is plotted for that
-reason, although catch rates do rise about tenfold from the 1980s to the 2010s.
+that break June-July shelf rates rise by day and by night alike: from 1.3 to 7.5 larvae per 100
+tows by day and from 16.5 to 74.2 by night. The early daytime bias alone therefore does not explain
+the rise. The share of night tows also grew, from 22% to 38%, and survey composition and sorting
+laboratory changed over the series. None of these can be separated from a change in abundance with
+the archive, so no interannual trend is plotted.
 
 ```{r diel-era}
 era <- effort %>% filter(!is.na(night), month %in% PEAK, sta_depth_m > 0,
@@ -716,15 +720,17 @@ effort %>% filter(!is.na(region), sta_depth_m <= SHELF_M) %>%
 
 ## Why no interannual trend is fitted
 
-Catch rates rise roughly tenfold between the 1980s and the 2010s. Daytime sampling on the early
-trawl surveys was a known bias, addressed in the mid 1990s. If the rise were real, day and night
-rates should move together across that break. The day rate moves about 29-fold and the night rate
-about 1.6-fold, so the rise tracks the sampling.
+Daytime sampling on the early trawl surveys was a known bias, addressed in the mid 1990s. If that
+bias alone drove the rise in catch rates, only the day rate should move across the break. Both
+move: the day rate about 5.8-fold and the night rate about 4.5-fold. The bias is not the whole
+story, but the share of night tows, survey composition and sorting laboratory all changed too, and
+the archive cannot separate them from abundance. No trend is fitted.
 
 ```{r check-trend}
 era %>% select(era, night, tows, larvae, per_100) %>%
   pivot_wider(names_from = era, values_from = c(tows, larvae, per_100)) %>%
   mutate(fold_change = round(`per_100_1995-2016` / `per_100_1982-1994`, 1))
+era %>% group_by(era) %>% summarise(pct_night = round(100 * sum(tows[night]) / sum(tows)), tows = sum(tows))
 ```
 
 ## Surface temperature sentinels
