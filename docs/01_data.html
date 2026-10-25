@@ -1504,7 +1504,7 @@ data</h1>
 <p>Downloads the SEAMAP plankton archive and builds the three tables the
 analysis uses: sampling effort, cobia catch records, and individual
 larval lengths.</p>
-<pre class="r"><code>library(tidyverse)
+<pre class="r"><code>library(tidyverse); library(suncalc)
 
 dir_raw     &lt;- &quot;data/raw&quot;
 dir_seamap  &lt;- file.path(dir_raw, &quot;seamap&quot;)
@@ -1591,22 +1591,10 @@ holds no salinity field.</p>
 Eastern time; from about 2000 nearly every station is logged in GMT.
 Read as local throughout, a 3 pm tow logged after 2000 becomes 8 pm.
 Each time is converted to GMT, and a station is night when the sun was
-below the horizon at that time and position. Zone 9 (“other”) and
-impossible times are left missing.</p>
+below the horizon at that time and position, from <code>suncalc</code>.
+Zone 9 (“other”) and impossible times are left missing.</p>
 <pre class="r"><code>TEMP_OK &lt;- c(5, 36)                                  # outside this range TEMP_SSURF is a sentinel
 TZ_OFFSET &lt;- c(&quot;1&quot; = -5, &quot;2&quot; = -4, &quot;3&quot; = -6, &quot;4&quot; = -5, &quot;5&quot; = -4, &quot;6&quot; = -3, &quot;8&quot; = 0)  # hours from GMT
-
-# Solar elevation in degrees (NOAA general solar position approximation).
-sun_altitude &lt;- function(date, gmt_hour, lat, lon) {
-  g    &lt;- 2 * pi / 365 * (yday(date) - 1 + (gmt_hour - 12) / 24)
-  decl &lt;- 0.006918 - 0.399912 * cos(g) + 0.070257 * sin(g) - 0.006758 * cos(2 * g) +
-          0.000907 * sin(2 * g) - 0.002697 * cos(3 * g) + 0.00148 * sin(3 * g)
-  eqt  &lt;- 229.18 * (0.000075 + 0.001868 * cos(g) - 0.032077 * sin(g) -
-                    0.014615 * cos(2 * g) - 0.040849 * sin(2 * g))
-  hour_angle &lt;- ((gmt_hour * 60 + eqt + 4 * lon) / 4 - 180) * pi / 180
-  asin(sin(lat * pi / 180) * sin(decl) +
-       cos(lat * pi / 180) * cos(decl) * cos(hour_angle)) * 180 / pi
-}
 
 starec &lt;- read_seamap(&quot;STAREC.csv&quot;) %&gt;%
   transmute(v_c_p    = V_C_P,
@@ -1624,9 +1612,10 @@ starec &lt;- read_seamap(&quot;STAREC.csv&quot;) %&gt;%
   distinct(v_c_p, .keep_all = TRUE) %&gt;%    # V_C_P should be unique; keep the first if not
   mutate(hh = suppressWarnings(as.integer(substr(str_pad(time_mil, 4, &quot;left&quot;, &quot;0&quot;), 1, 2))),
          mm = suppressWarnings(as.integer(substr(str_pad(time_mil, 4, &quot;left&quot;, &quot;0&quot;), 3, 4))),
-         gmt_hour = if_else(hh &lt;= 23 &amp; mm &lt;= 59,
-                            (hh + mm / 60 - TZ_OFFSET[time_zn]) %% 24, NA_real_),
-         night = sun_altitude(date, gmt_hour, lat, lon) &lt; 0) %&gt;%
+         time_utc = if_else(hh &lt;= 23 &amp; mm &lt;= 59,
+                            as.POSIXct(date, tz = &quot;UTC&quot;) + (hh + mm / 60 - TZ_OFFSET[time_zn]) * 3600,
+                            as.POSIXct(NA, tz = &quot;UTC&quot;)),
+         night = getSunlightPosition(data = data.frame(date = time_utc, lat = lat, lon = lon))$altitude &lt; 0) %&gt;%
   select(-hh, -mm)
 
 sprintf(&quot;%d stations; surface temperature on %d (%.1f%%)&quot;,
@@ -1657,32 +1646,32 @@ sprintf(&quot;%d stations; surface temperature on %d (%.1f%%)&quot;,
 <tr class="odd">
 <td align="left">2</td>
 <td align="left">FALSE</td>
-<td align="right">527</td>
+<td align="right">529</td>
 </tr>
 <tr class="even">
 <td align="left">2</td>
 <td align="left">TRUE</td>
-<td align="right">442</td>
+<td align="right">440</td>
 </tr>
 <tr class="odd">
 <td align="left">3</td>
 <td align="left">FALSE</td>
-<td align="right">4329</td>
+<td align="right">4328</td>
 </tr>
 <tr class="even">
 <td align="left">3</td>
 <td align="left">TRUE</td>
-<td align="right">4286</td>
+<td align="right">4287</td>
 </tr>
 <tr class="odd">
 <td align="left">4</td>
 <td align="left">FALSE</td>
-<td align="right">11193</td>
+<td align="right">11172</td>
 </tr>
 <tr class="even">
 <td align="left">4</td>
 <td align="left">TRUE</td>
-<td align="right">9685</td>
+<td align="right">9706</td>
 </tr>
 <tr class="odd">
 <td align="left">4</td>
@@ -1707,12 +1696,12 @@ sprintf(&quot;%d stations; surface temperature on %d (%.1f%%)&quot;,
 <tr class="odd">
 <td align="left">8</td>
 <td align="left">FALSE</td>
-<td align="right">8499</td>
+<td align="right">8488</td>
 </tr>
 <tr class="even">
 <td align="left">8</td>
 <td align="left">TRUE</td>
-<td align="right">7990</td>
+<td align="right">8001</td>
 </tr>
 </tbody>
 </table>

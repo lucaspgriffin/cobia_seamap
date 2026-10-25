@@ -9,7 +9,7 @@ the authors.
 `STAREC.TIME_ZN` records the clock each `TIME_MIL` is on (EST, EDT, CST, CDT, AST, ADT or GMT).
 From about 2000 nearly all stations are logged in GMT; the original code read every time as local,
 which misclassified 31-41% of tows from 2000 onward. Times are now converted to GMT, and a tow is
-night when the sun is below the horizon at its time and position (NOAA solar position
+night when the sun is below the horizon at its time and position (`suncalc` package; previously a NOAA solar position
 approximation). The share of night tows is now steady at 42-47% across decades
 (`check-time-zone` in `02_analysis.Rmd`).
 
