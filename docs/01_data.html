@@ -1501,9 +1501,9 @@ data</h1>
 </div>
 
 
-<p>Downloads the SEAMAP plankton archive and builds the three tables the
-analysis uses: sampling effort, cobia catch records, and individual
-larval lengths.</p>
+<p>This notebook downloads the SEAMAP plankton archive and builds the
+three tables used in the analysis, which are sampling effort, cobia
+catch records, and individual larval lengths.</p>
 <pre class="r"><code>library(tidyverse); library(suncalc)
 
 dir_raw     &lt;- &quot;data/raw&quot;
@@ -1516,9 +1516,9 @@ FATHOM &lt;- 1.8288                                     # DEPTH_SSTA is recorded
 <div id="download" class="section level1">
 <h1>Download</h1>
 <p>The Gulf States Marine Fisheries Commission distributes the whole
-plankton archive as one zip, re-released periodically. The chunk runs
-only if the tables are missing. It is a few hundred MB on the first
-pass.</p>
+plankton archive as one zip file and updates it periodically. This chunk
+runs only if the tables are missing. The first download is a few hundred
+MB.</p>
 <pre class="r"><code>URL  &lt;- &quot;https://seamapdata.gsmfc.org/files/SEAMAPPlanktonCSV.zip&quot;
 zipf &lt;- file.path(dir_raw, &quot;SEAMAPPlanktonCSV.zip&quot;)
 want &lt;- c(&quot;STAREC.csv&quot;, &quot;ISTRWK.csv&quot;, &quot;ISARWK.csv&quot;, &quot;ILFRWK.csv&quot;)
@@ -1530,10 +1530,10 @@ for (f in want[!file.exists(file.path(dir_seamap, want))]) {
 }
 writeLines(c(paste(&quot;source:&quot;, URL), paste(&quot;downloaded:&quot;, format(Sys.time()))),
            file.path(dir_seamap, &quot;SOURCE.txt&quot;))</code></pre>
-<p>Four tables are used. They key on <code>V_C_P</code> (vessel, cruise,
-station), <code>V_C_P_S</code> (plus sample) and
-<code>V_C_P_S_CAT</code> (plus catalogue), which links a length to a
-catch record.</p>
+<p>Four tables are used. They are linked by <code>V_C_P</code> (vessel,
+cruise, station), <code>V_C_P_S</code> (adds the sample), and
+<code>V_C_P_S_CAT</code> (adds the catalog number), which links a length
+to a catch record.</p>
 <table>
 <colgroup>
 <col width="33%" />
@@ -1570,8 +1570,8 @@ catch record.</p>
 </tr>
 </tbody>
 </table>
-<p>Every column comes in as character and the first header carries a
-byte order mark.</p>
+<p>Every column is read as text, and the byte order mark at the start of
+the first header is removed.</p>
 <pre class="r"><code>read_seamap &lt;- function(f) {
   read_csv(file.path(dir_seamap, f), col_types = cols(.default = col_character()),
            show_col_types = FALSE, name_repair = &quot;minimal&quot;) %&gt;%
@@ -1580,19 +1580,19 @@ byte order mark.</p>
 </div>
 <div id="stations" class="section level1">
 <h1>Stations</h1>
-<p>Positions are degrees and minutes in separate columns.
-<code>DEPTH_SSTA</code> is in fathoms, not metres.
-<code>TEMP_SSURF</code> is surface temperature in degrees Celsius and
-carries zeros where no reading was taken, so values outside 5-36 degrees
-are set to missing rather than treated as cold water. The station table
-holds no salinity field.</p>
-<p><code>TIME_MIL</code> is clock time in whichever zone
-<code>TIME_ZN</code> names. Early cruises mostly logged local Central or
-Eastern time; from about 2000 nearly every station is logged in GMT.
-Read as local throughout, a 3 pm tow logged after 2000 becomes 8 pm.
-Each time is converted to GMT, and a station is night when the sun was
-below the horizon at that time and position, from <code>suncalc</code>.
-Zone 9 (“other”) and impossible times are left missing.</p>
+<p>Positions are stored as degrees and minutes in separate columns.
+<code>DEPTH_SSTA</code> is in fathoms, not meters.
+<code>TEMP_SSURF</code> is surface temperature in degrees Celsius and is
+entered as zero when no reading was taken, so values outside 5 to 36
+degrees are set to missing. The station table has no salinity field.</p>
+<p><code>TIME_MIL</code> is clock time in the time zone given by
+<code>TIME_ZN</code>. Early cruises mostly recorded local Central or
+Eastern time, and from about 2000 nearly every station was recorded in
+GMT. A tow at 3 pm local time is recorded as 2000 GMT, so reading it as
+local time would place it at 8 pm. Each time is therefore converted to
+GMT, and a station is classed as night when the sun was below the
+horizon at that time and position, using the <code>suncalc</code>
+package. Zone 9 (“other”) and impossible times are set to missing.</p>
 <pre class="r"><code>TEMP_OK &lt;- c(5, 36)                                  # outside this range TEMP_SSURF is a sentinel
 TZ_OFFSET &lt;- c(&quot;1&quot; = -5, &quot;2&quot; = -4, &quot;3&quot; = -6, &quot;4&quot; = -5, &quot;5&quot; = -4, &quot;6&quot; = -3, &quot;8&quot; = 0)  # hours from GMT
 
@@ -1709,17 +1709,18 @@ sprintf(&quot;%d stations; surface temperature on %d (%.1f%%)&quot;,
 </div>
 <div id="effort" class="section level1">
 <h1>Effort</h1>
-<p>Gear codes from Section II of the survey documentation.
-<code>SORT_IST</code> records whether a sample was sorted; only sorted
-samples could have yielded an identified larva, so they are the pool any
-catch rate divides by.</p>
-<p>Only the standard SEAMAP gears count as effort, as the survey
-documentation defines them: 61 or 60 cm bongo with 0.333 mm mesh (gear
-01 or 17, mesh 03) and single or double neuston with 0.947 mm mesh (gear
-03 or 08, mesh 09). Bongo and neuston frames fished with other meshes or
-sizes are labelled non-standard, so they stay on the distribution map
-but drop out of every rate. Among cobia that removes 36 larvae, 19 from
-a bongo and 17 from a neuston with mesh 05.</p>
+<p>Gear codes follow Section II of the survey documentation.
+<code>SORT_IST</code> records whether a sample was sorted. Only sorted
+samples could produce an identified larva, so only sorted samples count
+as effort in the catch rates.</p>
+<p>Only the standard SEAMAP gears count as effort, as defined in the
+survey documentation. These are the 61- or 60-cm bongo with 0.333-mm
+mesh (gear 01 or 17, mesh 03) and the single or double neuston net with
+0.947-mm mesh (gear 03 or 08, mesh 09). Bongo and neuston nets with
+other meshes are labeled non-standard. Their larvae stay on the
+distribution map but are left out of every catch rate. This removes 36
+cobia larvae, 19 from bongo nets and 17 from neuston nets with mesh
+05.</p>
 <pre class="r"><code>GEAR &lt;- c(&quot;01&quot; = &quot;Bongo&quot;, &quot;17&quot; = &quot;Bongo&quot;, &quot;11&quot; = &quot;Bongo&quot;, &quot;14&quot; = &quot;Bongo&quot;, &quot;05&quot; = &quot;Bongo&quot;,
           &quot;12&quot; = &quot;Bongo&quot;, &quot;13&quot; = &quot;Bongo&quot;, &quot;15&quot; = &quot;Bongo&quot;,
           &quot;03&quot; = &quot;Neuston&quot;, &quot;08&quot; = &quot;Neuston&quot;,
@@ -1818,10 +1819,10 @@ count(effort, gear, name = &quot;deployments&quot;)</code></pre>
 </tbody>
 </table>
 </div>
-<p>Sampling is uneven through the year. The spring survey works the open
-Gulf, the fall survey the shelf, and June and July plankton sampling is
-carried on the shrimp trawl survey, which works west of 88 W and stopped
-taking plankton after 2016.</p>
+<p>Sampling differs through the year. The spring survey samples the open
+Gulf and the fall survey samples the shelf. June and July plankton
+samples come from the summer shrimp trawl survey, which works west of 88
+W and stopped collecting plankton after 2016.</p>
 <pre class="r"><code>effort %&gt;% filter(sta_depth_m &gt; 0, sta_depth_m &lt;= 200) %&gt;%
   mutate(era = if_else(year &lt;= 2016, &quot;1982-2016&quot;, &quot;2017-2024&quot;)) %&gt;%
   count(era, month) %&gt;% pivot_wider(names_from = era, values_from = n, values_fill = 0)</code></pre>
@@ -1901,10 +1902,10 @@ taking plankton after 2016.</p>
 </div>
 <div id="cobia-catch" class="section level1">
 <h1>Cobia catch</h1>
-<p>The match is anchored at the start of the taxon name so that
-<em>Poromitra megalops</em>, a melamphaid sharing the species epithet,
-is not swept in. Counts are of the fraction of a sample that was sorted,
-so the aliquot has to be divided back out.</p>
+<p>The taxon match is anchored to the start of the name so that
+<em>Poromitra megalops</em>, a melamphaid with the same species name, is
+not included. Counts refer to the sorted part of each sample, so each
+count is multiplied by the inverse of its aliquot.</p>
 <pre class="r"><code>ALIQ_MULT &lt;- c(&quot;1/1&quot; = 1, &quot;1/2&quot; = 2, &quot;1/4&quot; = 4, &quot;1/8&quot; = 8)
 
 catch &lt;- read_seamap(&quot;ISARWK.csv&quot;) %&gt;%
@@ -1944,10 +1945,10 @@ count(catch, taxon, wt = n_total, name = &quot;larvae&quot;)</code></pre>
 </div>
 <div id="lengths" class="section level1">
 <h1>Lengths</h1>
-<p>Size classes are round numbers bracketing the tertiles. They are
-descriptive cuts on length, not developmental stages: the specimens were
-not re-examined, and no age-length relation has been published for wild
-cobia larvae.</p>
+<p>Size classes use round numbers close to the tertiles of measured
+length. They describe size only and are not developmental stages,
+because the specimens were not re-examined and no age-length
+relationship has been published for wild cobia larvae.</p>
 <pre class="r"><code>SIZE_LEVELS &lt;- c(&quot;Small (&lt;5 mm)&quot;, &quot;Medium (5-15 mm)&quot;, &quot;Large (&gt;15 mm)&quot;)
 
 lengths &lt;- read_seamap(&quot;ILFRWK.csv&quot;) %&gt;%
@@ -1987,9 +1988,10 @@ round(quantile(lengths$length_mm, c(0, 1/3, 0.5, 2/3, 1)), 1)</code></pre>
 </tbody>
 </table>
 </div>
-<p>Classification is per larva. Taking a tow median would bury mixed
-catches: a tow of 2.4 and 6.0 mm has a median of 4.2 mm and loses its
-smallest larva.</p>
+<p>Each larva is classed by its own length rather than by the tow
+median. A median hides mixed catches, because a tow with larvae of 2.4
+and 6.0 mm has a median of 4.2 mm and no longer shows the 2.4 mm
+larva.</p>
 <pre class="r"><code>by_rec &lt;- lengths %&gt;%
   group_by(v_c_p_s_cat) %&gt;%
   summarise(n_meas = n(), len_med = median(length_mm), len_min = min(length_mm),

@@ -102,9 +102,9 @@ map_frame <- list(coord_sf(xlim = BOX$lon, ylim = MAP_LAT, expand = FALSE), labs
                         panel.border = element_rect(fill = NA, colour = "black", linewidth = 0.3)))
 ```
 
-Catch rates divide by effort drawn from the same pool as the numerator, which here is sorted bongo
-and neuston deployments. Comparisons between places are restricted to the months both were
-sampled, because the surveys do not cover the same areas in every month.
+Catch rates count larvae and effort from the same samples, which here are sorted bongo and neuston
+deployments. Places are compared only within the months when both were sampled, because the
+surveys do not cover the same areas in every month.
 
 ```{r excluded}
 sprintf("off-gear or unsorted, kept on the map but out of every rate: %d records, %.0f larvae",
@@ -113,18 +113,18 @@ sprintf("off-gear or unsorted, kept on the map but out of every rate: %d records
 
 # Distribution
 
-Every record in the study box, coloured by the size class holding most of the tow. Descriptive, so
-no effort is involved; the catch-rate maps come later.
+This map shows every record in the study area, colored by the size class that made up most of each
+tow. It shows catches only, not catch rates, which come later.
 
 ```{r dist-numbers}
 count(gulf, size_class)
 gulf %>% slice_max(n_total, n = 3) %>% select(date, lat, lon, gear, n_total, n_meas)
 ```
 
-Catches are heavily skewed. The median tow holds one larva and 79% hold one or two, but a neuston
-tow off the delta on 8 June 2012 held 232, with the adjacent station the same day holding 38. The
-whole sample was sorted in that case, so the number is real rather than a sub-sampling artefact.
-Symbol size is binned for that reason: a continuous scale lets the one tow flatten everything else.
+Catches are very uneven. The median tow held one larva and 79% held one or two, but a neuston tow
+off the Mississippi River delta on 8 June 2012 held 232, and the next station sampled that day held
+38. That whole sample was sorted, so the count was not inflated by an aliquot correction. Symbol
+sizes are binned, because on a continuous scale that one tow would make every other tow look small.
 
 ```{r main_distribution, fig.width = 9, fig.height = 5.6}
 p_dist <- ggplot() +
@@ -156,9 +156,9 @@ p_dist
 
 # Season
 
-Held to shelf stations and to 1982--2016, so the months sit on one footprint and one year range.
-Gulf-wide effort mixes shelf and deep water in proportions that change month to month, and
-June--July sampling ends in 2016 while September sampling continues.
+This section uses only shelf stations from 1982 to 2016, so every month covers the same area and the
+same years. Across the whole Gulf, the mix of shelf and deep-water effort changes from month to
+month, and June and July sampling ended in 2016 while September sampling continued.
 
 ```{r season-rates}
 recs <- rates  %>% filter(sta_depth_m > 0, sta_depth_m <= SHELF_M, year %in% SERIES)
@@ -172,11 +172,11 @@ write_csv(cpue, file.path(dir_derived, "cpue_by_month.csv"), na = "")
 cpue %>% select(month_lab, n_larvae, n_tows, per_100)
 ```
 
-September carries more sorted shelf tows than any other month, so in raw counts it looks like a
-second spawning peak. Dividing by effort removes it.
+September has more sorted shelf tows than any other month, so raw counts make it look like a second
+spawning peak. That peak disappears once counts are divided by effort.
 
-The peak is not a footprint artefact either. Held to the Texas--Louisiana shelf alone, which is
-sampled in every month, the margin widens rather than narrows.
+The June peak also does not come from where sampling took place. On the Texas--Louisiana shelf
+alone, which was sampled in every month, the difference between June and other months is larger.
 
 ```{r season-fixed-area}
 tx <- effort %>% filter(region == "Texas-Louisiana shelf", year %in% SERIES) %>%
@@ -187,9 +187,9 @@ tx <- effort %>% filter(region == "Texas-Louisiana shelf", year %in% SERIES) %>%
 tx %>% filter(month %in% c(5:9)) %>% select(month, tows, larvae, rate)
 ```
 
-Abundance peaks in June but the smallest larvae peak in May, which fits a cohort spawned in or
-before May rather than peak spawning in June. Two thirds of larvae were measured, so the bar is
-split by the measured composition of that month.
+Catch rates peak in June, but the share of small larvae peaks in May. This fits larvae spawned in or
+before May rather than a spawning peak in June. About two thirds of larvae were measured, so each
+bar is split by the size composition of the larvae measured in that month.
 
 ```{r main_season, fig.width = 5, fig.height = 3.2}
 mix <- lengths %>% inner_join(select(recs, v_c_p_s_cat, month), by = "v_c_p_s_cat") %>%
@@ -210,10 +210,11 @@ p_season
 
 # The two shelves
 
-Gravid cobia are taken on the west Florida shelf, so an apparent scarcity of larvae there has to
-be tested against season-matched effort rather than read off an annual map. West Florida takes
-only about 12% of its shelf tows in June--July against 27% on the Texas--Louisiana shelf, because
-the summer survey works west of 88 W. Everything here is restricted to June--July for that reason.
+Cobia in spawning condition are caught on the west Florida shelf, so the low number of larvae there
+has to be checked against effort from the same season rather than read from an annual map. Only
+about 12% of west Florida shelf tows were in June and July, compared with 26% on the
+Texas--Louisiana shelf, because the summer survey works west of 88 W. This comparison therefore
+uses only June and July.
 
 ```{r shelf-cells}
 peak_eff  <- effort %>% filter(month %in% PEAK)
@@ -248,10 +249,12 @@ p_rate <- ggplot() +
 p_eff | p_rate
 ```
 
-A deployment is a station and a gear, which is what the denominator counts. Joining catch on
-station alone would give each tow's larvae to both the bongo and the neuston row and double the
-rate. Intervals are bootstrapped over tows, since larvae cluster within a tow and a Poisson
-interval would be far too tight.
+Effort is counted as one deployment per gear per station. Larvae are matched to effort by both
+station and gear, because matching by station alone would count a tow's larvae in both the bongo
+and the neuston rows and double the rate. Confidence intervals come from resampling tows with
+replacement 2000 times (a bootstrap). Larvae are caught in clumps, with most tows empty and a few
+holding many. A Poisson interval assumes each larva is caught independently, so it would give
+intervals that are much too narrow.
 
 ```{r shelf-rates}
 tow_catch <- peak_recs %>% filter(year %in% SERIES) %>%
@@ -272,8 +275,8 @@ write_csv(reg, file.path(dir_derived, "shelf_comparison.csv"))
 reg
 ```
 
-Not only season: the two are also comparable on depth, gear and spread over years, so the
-difference is not a by-product of what was sampled.
+The two shelves were also similar in station depth, gear mix, and years sampled, so the difference
+does not come from differences in what was sampled.
 
 ```{r shelf-controls}
 peak_eff %>% filter(!is.na(region), year %in% SERIES) %>%
@@ -319,9 +322,9 @@ p_size <- ggplot(by_depth, aes(sta_depth_m, length_mm, colour = size)) +
 p_size
 ```
 
-The cut-off for the smallest class has no strong basis, so the shelf result is checked against it
-rather than resting on it. It weakens gradually as larger and more dispersed larvae are swept in,
-which is what should happen, and never reverses.
+There is no strong reason for the 5 mm cut-off for small larvae, so the shelf result is checked
+across several cut-offs. The share caught on the shelf falls slowly as the cut-off rises and larger
+larvae that have drifted farther are included, which is expected, and it never reverses.
 
 ```{r explore_size_cutoff}
 map_dfr(c(3, 3.2, 3.5, 4, 4.5, 5), function(cut) {
@@ -335,12 +338,12 @@ map_dfr(c(3, 3.2, 3.5, 4, 4.5, 5), function(cut) {
 
 # Day and night
 
-Pooled rates run higher at night, which could be larvae avoiding the net in daylight or larvae
-sitting deeper by day. The two make opposite predictions. Avoidance should bite hardest on the
-largest larvae, which see better and swim harder. Vertical movement should show in one gear and not
-the other. Neuston fishes only the top half-metre, so larvae rising to the surface at night raise its
-catch. Bongo fishes obliquely through the column and takes them at either depth, so its catch should
-hold steady.
+Catch rates are higher at night. Larvae may avoid the net in daylight, or they may stay deeper by
+day and rise to the surface at night. The two explanations predict different patterns. If larvae
+avoid the net, the largest larvae should show the biggest day-night difference, because they see
+and swim better. If larvae move up at night, the neuston net, which samples only the top half meter,
+should catch more at night, while the bongo net, which samples the whole water column, should catch
+about the same by day and by night.
 
 ```{r diel-table}
 diel <- lengths %>%
@@ -358,11 +361,11 @@ write_csv(diel, file.path(dir_derived, "diel_by_gear_size.csv"))
 diel
 ```
 
-Neuston takes 3-9 times more larvae at night, while bongo takes small and medium larvae at about the
-same rate by day and by night (ratios 1.09 and 1.07). That is what vertical movement into the
-surface layer looks like. The neuston night:day ratio also falls with larval size, from 8.8 to 3.3,
-which is backwards for net avoidance. The bongo large-larva cell is 0.01 against 0.05 per 100 tows,
-which is noise.
+Neuston nets caught 3 to 9 times more larvae at night, while bongo nets caught small and medium
+larvae at about the same rate by day and by night (ratios of 1.09 and 1.07). This is the pattern
+expected if larvae move up to the surface at night. The neuston night-to-day ratio also falls with
+larval size, from 8.8 to 3.3, which is the opposite of what net avoidance predicts. The bongo values
+for large larvae (0.01 and 0.05 per 100 tows) rest on four larvae and are not interpreted.
 
 ```{r explore_diel, fig.width = 6, fig.height = 3.2}
 p_diel <- diel %>% pivot_longer(c(day, night), names_to = "tod", values_to = "per_100") %>%
@@ -376,12 +379,11 @@ p_diel <- diel %>% pivot_longer(c(day, night), names_to = "tod", values_to = "pe
 p_diel
 ```
 
-Daytime sampling on the early trawl surveys is a documented bias, corrected around 1995. Across
-that break June-July shelf rates rise by day and by night alike: from 1.4 to 7.5 larvae per 100
-tows by day and from 16.1 to 74.2 by night. The early daytime bias alone therefore does not explain
-the rise. The share of night tows also grew, from 22% to 38%, and survey composition and sorting
-laboratory changed over the series. None of these can be separated from a change in abundance with
-the archive, so no interannual trend is plotted.
+Early trawl surveys sampled mostly by day, and this changed around 1995. Between 1982-1994 and
+1995-2016, June and July shelf rates rose both by day (1.4 to 7.5 larvae per 100 tows) and by night
+(16.1 to 74.2). Daytime sampling therefore does not explain the rise by itself. The share of night
+tows also rose, from 22% to 38%, and the mix of surveys changed over the series. The archive cannot
+separate these changes from a real change in abundance, so no trend over years is plotted.
 
 ```{r diel-era}
 era <- effort %>% filter(!is.na(night), month %in% PEAK, sta_depth_m > 0,
@@ -399,15 +401,15 @@ era
 
 # Temperature
 
-Ditty and Shaw (1992) characterised Gulf cobia larvae by the surface temperature they were taken
-at: 85% of their 76 larvae came from 25-30 degrees, mean 28.2, range 24.2-32.0. That is the one
-axis where the archive can put their 76 larvae against a sampled background, because `STAREC`
-carries a surface reading for nearly every station. The station table holds no salinity, so their
-salinity result cannot be revisited here without pulling a further table.
+Ditty and Shaw (1992) described Gulf cobia larvae by the surface temperature at capture. They found
+85% of their 76 larvae at 25 to 30 degrees, with a mean of 28.2 and a range of 24.2 to 32.0.
+Temperature is the one variable where the archive can compare larvae with the conditions sampled,
+because `STAREC` has a surface reading for nearly every station. The station table has no salinity,
+so their salinity result cannot be checked here without another table.
 
-A temperature at which larvae are caught is not a preference. Sampling itself is seasonal, so warm
-water is oversampled relative to the year as a whole, and the comparison below is against the
-temperatures actually fished rather than against the Gulf.
+The temperature at which larvae are caught is not a preference. Sampling is seasonal, so warm water
+is sampled more than it would be across the full year. The comparison below is therefore against the
+temperatures of all tows, not against the Gulf as a whole.
 
 ```{r temp-table}
 temp_tows <- effort %>% filter(!is.na(temp_surf))
@@ -445,11 +447,11 @@ p_temp
 
 # Figures for submission
 
-One file per figure, as the journal asks, in PDF and as 600 dpi TIFF. Widths are set for the
-printed page (full width 7 in, one column 3.5 in) so that 8 pt labels print at 8 pt. All seven
-figures are exported, numbered in the order the Results take them up. Figures 4 and 6 repeat
-Tables 2 and 3 and are candidates to drop if the text runs short of the 1-figure-per-4-pages limit.
-Captions must spell out DWH (Deepwater Horizon wellhead) and the isobaths.
+Each figure is saved as its own file, in PDF and as a 600 dpi TIFF, as the journal requires. Widths
+match the printed page (7 in for full width, 3.5 in for one column) so that 8 pt labels print at
+8 pt. All seven figures are exported and numbered in the order they appear in the Results. Figures 4
+and 6 repeat Tables 2 and 3 and can be dropped to meet the limit of one figure per four pages of
+text. Captions must spell out DWH (Deepwater Horizon wellhead) and the isobaths.
 
 ```{r journal-figures}
 dir_journal <- file.path(dir_fig, "journal")
@@ -487,7 +489,7 @@ list.files(dir_journal)
 
 # Numbers for the text
 
-Figures quoted in the Results that are not shown elsewhere in this document.
+Numbers quoted in the Results that are not shown elsewhere in this document.
 
 ## Catch by gear
 
@@ -509,8 +511,9 @@ sprintf("deployments with cobia: %d of %d", sum(all_tows$n > 0), nrow(all_tows))
 
 ## Against Ditty and Shaw (1992)
 
-They report 98% of larvae in June-September and 75% at stations under 100 m (median 50 m). Every
-larva in the study box counts here, as theirs did, so these are shares of catch, not rates.
+Ditty and Shaw (1992) reported 98% of larvae in June to September and 75% at stations shallower than
+100 m (median 50 m). Every larva in the study area is counted here, as in their study, so these are
+shares of the catch, not catch rates.
 
 ```{r text-ditty-shaw}
 gulf %>% summarise(
@@ -524,11 +527,11 @@ gulf %>% summarise(
 count(gulf, month, wt = n_total, name = "larvae")
 ```
 
-## The shelf comparison, re-cut
+## The shelf comparison, sensitivity checks
 
-The June-July comparison of the two shelves, recomputed with the two largest catches removed, for
-1995-2016 alone, by time of day and by gear. Intervals here resample whole cruises, since tows on
-one cruise share weather, water and crew.
+The June and July comparison of the two shelves is repeated without the two largest catches, for
+1995-2016 only, by time of day, and by gear. These confidence intervals resample whole cruises,
+because tows on the same cruise share weather, water conditions, and crew.
 
 ```{r text-shelf-robustness}
 shelf_tows <- peak_eff %>% filter(!is.na(region), year %in% SERIES) %>%
@@ -562,12 +565,12 @@ shelf_tows %>% group_by(region) %>%
 
 # Checks
 
-Each block states what should be true, computes it, and shows both sides so the comparison is
-visible rather than reduced to a pass or fail.
+Each check states what should be true, calculates it, and shows both values so the comparison can
+be seen rather than reduced to pass or fail.
 
 ## Extraction reproduces from the raw table
 
-Counts taken straight from `ISARWK` should equal what the pipeline carried forward.
+Counts taken directly from `ISARWK` should equal the counts carried through the pipeline.
 
 ```{r check-extraction}
 isarwk <- read_csv("data/raw/seamap/ISARWK.csv", col_types = cols(.default = col_character()),
@@ -585,8 +588,8 @@ tibble(quantity    = c("records", "larvae after aliquot correction", "sub-sample
   mutate(agree = from_raw == in_pipeline)
 ```
 
-An unanchored taxon match would also catch *Poromitra megalops*, a melamphaid sharing the species
-epithet. These two lists should be identical.
+A taxon match that is not anchored to the start of the name would also pick up *Poromitra
+megalops*, a melamphaid with the same species name. The two lists below should be identical.
 
 ```{r check-taxon}
 tibble(anchored   = paste(sort(unique(raw$TAXON)), collapse = "; "),
@@ -609,10 +612,10 @@ tibble(quantity = c("records without a station", "latitude range", "longitude ra
                  as.character(nrow(records) - nrow(gulf))))
 ```
 
-## The numerator belongs to the same pool as the denominator
+## Larvae and effort come from the same samples
 
-Effort is sorted bongo and neuston deployments, so a larva taken any other way has no matching
-denominator. These are the records held out of every rate.
+Effort includes only sorted bongo and neuston deployments, so a larva caught any other way has no
+matching effort. These records are left out of every rate.
 
 ```{r check-excluded}
 gulf %>%
@@ -622,8 +625,8 @@ gulf %>%
   count(why, wt = n_total, name = "larvae")
 ```
 
-Recomputing the monthly numerator from scratch, with all four filters applied, should land on the
-number the rates were built from.
+Recalculating the monthly larva counts from scratch, with all four filters applied, should give the
+same numbers used in the rates.
 
 ```{r check-numerator}
 tibble(source = c("rebuilt here", "used in the monthly rates"),
@@ -635,8 +638,8 @@ tibble(source = c("rebuilt here", "used in the monthly rates"),
 
 ## Lengths
 
-Coverage is uneven and worst in the largest tows, which is where a size class rests on fewest
-measurements.
+Length coverage is uneven and lowest in the largest tows, so size classes in those tows rest on the
+fewest measurements.
 
 ```{r check-lengths}
 tibble(quantity = c("larvae measured", "larvae counted", "coverage",
@@ -655,9 +658,9 @@ tibble(quantity = c("larvae measured", "larvae counted", "coverage",
 
 ## Depth
 
-Station depth is recorded in fathoms and converted. An independent bathymetry gives a check on
-whether the conversion is right: agreement should be near-perfect, and a missed conversion would
-show as a constant offset on the log scale.
+Station depth is recorded in fathoms and converted to meters. An independent bathymetry dataset
+checks the conversion. The two should agree closely, and a missed conversion would show as a
+constant offset on the log scale.
 
 ```{r check-depth}
 chk <- gulf %>% filter(sta_depth_m > 0)
@@ -671,11 +674,11 @@ tibble(stations = nrow(chk),
                                     chk$sta_depth_m / chk$etopo_m < 0.25))
 ```
 
-## Does the seasonal peak survive the controls?
+## Does the seasonal peak hold under the controls?
 
-The survey does not sample the same places, or at the same hours, in every month. If the June and
-July peak were an artefact of either, it should weaken when the area is held fixed or when day and
-night tows are separated. It does neither.
+The survey does not sample the same places or the same hours in every month. If the June and July
+peak came from either, it should weaken when the area is held fixed or when day and night tows are
+analyzed separately. It does not weaken in either case.
 
 ```{r check-season-controls}
 tod <- effort %>% filter(!is.na(night), sta_depth_m > 0, sta_depth_m <= SHELF_M,
@@ -698,11 +701,11 @@ tibble(control = c("all Gulf shelf, pooled", "Texas-Louisiana shelf only",
   mutate(across(june_july:september, ~ round(.x, 1)), ratio = round(june_july / september, 1))
 ```
 
-## Does the shelf difference survive them?
+## Does the shelf difference hold?
 
-West Florida takes a far smaller share of its tows in the spawning months, which is what made an
-all-month comparison misleading. Within June and July the two regions are comparable on depth,
-gear and years sampled, so the difference is not a by-product of what was sampled.
+West Florida has a much smaller share of its tows in the spawning months, which is why a comparison
+across all months was misleading. In June and July the two regions are similar in station depth,
+gear, and years sampled, so the difference does not come from differences in sampling.
 
 ```{r check-shelf-controls}
 effort %>% filter(!is.na(region), sta_depth_m <= SHELF_M) %>%
@@ -720,11 +723,11 @@ effort %>% filter(!is.na(region), sta_depth_m <= SHELF_M) %>%
 
 ## Why no interannual trend is fitted
 
-Daytime sampling on the early trawl surveys was a known bias, addressed in the mid 1990s. If that
-bias alone drove the rise in catch rates, only the day rate should move across the break. Both
-move: the day rate about 5.4-fold and the night rate about 4.6-fold. The bias is not the whole
-story, but the share of night tows, survey composition and sorting laboratory all changed too, and
-the archive cannot separate them from abundance. No trend is fitted.
+Early trawl surveys sampled mostly by day, which changed in the mid-1990s. If that alone caused the
+rise in catch rates, only the day rate should increase across the change. Both increased, the day
+rate about 5.4-fold and the night rate about 4.6-fold. Daytime sampling is therefore not the only
+explanation, and the share of night tows and the mix of surveys also changed. The archive cannot
+separate these from a change in abundance, so no trend is fitted.
 
 ```{r check-trend}
 era %>% select(era, night, tows, larvae, per_100) %>%
@@ -735,8 +738,8 @@ era %>% group_by(era) %>% summarise(pct_night = round(100 * sum(tows[night]) / s
 
 ## Surface temperature sentinels
 
-`TEMP_SSURF` carries zeros where no reading was taken. Left in, they would drag the mean down and
-invent cold-water records. The raw column is checked against the filtered one.
+`TEMP_SSURF` is entered as zero when no reading was taken. Left in, these zeros would lower the mean
+and add false cold-water records. The raw column is compared with the filtered one.
 
 ```{r check-temp}
 raw_t <- read_csv(file.path("data/raw/seamap", "STAREC.csv"),
@@ -754,9 +757,9 @@ tibble(check = c("stations in STAREC", "temperature recorded", "zero or below 5"
 
 ## June and July sampling ends in 2016
 
-The records run to 2024, but plankton sampling on the summer trawl survey stopped after 2016. Any
-monthly comparison that ignores this sets June and July over one span of years against September
-over another.
+Records run to 2024, but plankton sampling on the summer trawl survey stopped after 2016. A monthly
+comparison that ignores this would compare June and July from one set of years with September from
+another.
 
 ```{r check-series-end}
 effort %>% filter(month %in% PEAK, sta_depth_m > 0, sta_depth_m <= SHELF_M) %>%
@@ -769,9 +772,9 @@ effort %>% filter(month %in% PEAK, sta_depth_m > 0, sta_depth_m <= SHELF_M) %>%
 
 ## Station times are read in their recorded zone
 
-`TIME_ZN` shifts from local time to GMT over the series. If the conversion is right, the share of
-tows classed as night should hold roughly steady from decade to decade rather than jump when the
-logging convention changes.
+`TIME_ZN` changes from local time to GMT over the series. If the conversion is correct, the share of
+tows classed as night should stay about the same from decade to decade rather than jump when the
+recording practice changes.
 
 ```{r check-time-zone}
 effort %>% mutate(decade = 10 * (year %/% 10),
