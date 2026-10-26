@@ -374,8 +374,8 @@ p_diel <- diel %>% pivot_longer(c(day, night), names_to = "tod", values_to = "pe
   facet_wrap(~ gear, scales = "free_y") +
   scale_fill_manual(values = c(day = "#E8C547", night = "#2F4858"), name = NULL,
                     labels = c(day = "Day", night = "Night")) +
-  scale_x_discrete(labels = c("<5", "5-15", ">15")) +
-  labs(x = "Larval length (mm)", y = "Measured larvae per 100 tows")
+  scale_x_discrete(labels = c("<5", "5\u201315", ">15")) +
+  labs(x = "Larval length (mm)", y = "Measured larvae per 100 deployments")
 p_diel
 ```
 
