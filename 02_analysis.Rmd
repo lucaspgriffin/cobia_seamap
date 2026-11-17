@@ -198,12 +198,17 @@ if (!file.exists(oil_file)) {
 oil <- as.data.frame(rast(oil_file), xy = TRUE) %>% set_names(c("lon", "lat", "days"))
 # Cell maxima overstate the oiled area, so no area is quoted from this layer.
 
+# Depth stays as the blue fill; oil is drawn over it as a dark wash whose opacity rises with days.
 p_oil <- ggplot() +
-  geom_raster(data = oil, aes(lon, lat, fill = days)) +
-  scale_fill_gradient(low = "grey88", high = "grey25", name = "Days of\nsurface oil",
-                      breaks = c(1, 20, 40, 59),
-                      guide = guide_colourbar(order = 3, barwidth = unit(80, "pt"),
+  geom_raster(data = bathy, aes(lon, lat, fill = z), interpolate = TRUE) +
+  scale_fill_gradient(low = "#6A93BF", high = "#EEF4FA", name = "Depth (m)",
+                      labels = function(x) -x, breaks = c(0, -3000, -6000),
+                      guide = guide_colourbar(order = 4, barwidth = unit(80, "pt"),
                                               barheight = unit(6, "pt"))) +
+  geom_raster(data = oil, aes(lon, lat, alpha = days), fill = "grey10") +
+  scale_alpha_continuous(range = c(0.12, 0.7), limits = c(1, 59), breaks = c(1, 20, 40, 59),
+                         name = "Days of\nsurface oil",
+                         guide = guide_legend(order = 3, override.aes = list(fill = "grey10"))) +
   geom_sf(data = filter(iso, depth_m == 200), colour = "grey20", linewidth = 0.35) +
   geom_sf(data = filter(iso, depth_m > 200), colour = "grey35", linewidth = 0.2,
           linetype = "dotted") +
@@ -227,7 +232,7 @@ p_oil <- ggplot() +
          size = guide_bins(order = 2, override.aes = list(shape = 21, fill = "grey70",
                                                           colour = "grey15", stroke = 0.3))) +
   map_frame +
-  theme(panel.background = element_rect(fill = "white"), legend.box = "horizontal",
+  theme(panel.background = element_rect(fill = "#EEF4FA"), legend.box = "horizontal",
         legend.box.just = "top", legend.spacing.x = unit(10, "pt"))
 p_oil
 ```
@@ -552,7 +557,7 @@ diel_letters <- tibble(gear = c("Bongo", "Neuston"), lab = c("A", "B"))
 
 save_fig(p_oil + theme(legend.box = "vertical", legend.box.just = "left",
                         legend.spacing.y = unit(2, "pt"), plot.margin = margin(2, 20, 2, 2)),
-         "fig1_distribution", 7, 5)   # p_oil: records over DWH oiling (p_dist above is the depth-shaded version)
+         "fig1_distribution", 7, 5.7)   # p_oil: records over DWH oiling (p_dist above is the depth-shaded version)
 save_fig(p_season, "fig2_season", 5, 2.6)
 save_fig((p_eff + panel_letter("A")) / (p_rate + panel_letter("B")), "fig3_june_july_maps", 7, 7.6)
 save_fig(p_bar, "fig4_shelf_rates", 3.5, 3)                 # repeats Table 2; candidate to drop
