@@ -31,8 +31,9 @@ SORTED  <- c("1", "2", "4", "D")
 DWH     <- tibble(lon = -88.3660, lat = 28.7366)      # Deepwater Horizon wellhead
 
 SIZE_LEVELS <- c("Small (<5 mm)", "Medium (5-15 mm)", "Large (>15 mm)")
-SIZE_COLS   <- c("Small (<5 mm)" = "#D55E00", "Medium (5-15 mm)" = "#009E73",
-                 "Large (>15 mm)" = "#0072B2")
+# Size classes are ordered, so they run light to dark along viridis.
+SIZE_COLS   <- c("Small (<5 mm)" = "#7AD151", "Medium (5-15 mm)" = "#21908C",
+                 "Large (>15 mm)" = "#3B0F70")
 
 # Fishery Bulletin figure rules: one sans-serif size for every label, no bold or italic, no
 # background grid, no box around graphs (axis lines and ticks only), panel letters in bold Times
@@ -127,9 +128,15 @@ off the Mississippi River delta on 8 June 2012 held 232, and the next station sa
 sizes are binned, because on a continuous scale that one tow would make every other tow look small.
 
 ```{r main_distribution, fig.width = 9, fig.height = 5.6}
+# Sorted bongo or neuston deployments at stations where no gear caught cobia.
+no_cobia <- effort %>% filter(!v_c_p %in% records$v_c_p) %>%
+  filter(lon >= BOX$lon[1], lon <= BOX$lon[2], lat >= BOX$lat[1], lat <= BOX$lat[2]) %>%
+  distinct(lon = round(lon, 2), lat = round(lat, 2))
+sprintf("stations with no cobia: %d deployments, %d distinct positions",
+        sum(!effort$v_c_p %in% records$v_c_p), nrow(no_cobia))
 p_dist <- ggplot() +
   geom_raster(data = bathy, aes(lon, lat, fill = z), interpolate = TRUE) +
-  scale_fill_gradient(low = "#1f3d6b", high = "#dbe9f6", name = "Depth (m)",
+  scale_fill_gradient(low = "#6A93BF", high = "#EEF4FA", name = "Depth (m)",
                       labels = function(x) -x, breaks = c(0, -3000, -6000),
                       guide = guide_colourbar(order = 3, barwidth = unit(48, "pt"),
                                               barheight = unit(6, "pt"))) +
@@ -139,17 +146,21 @@ p_dist <- ggplot() +
   geom_sf(data = land, fill = "grey85", colour = "grey40", linewidth = 0.2) +
   geom_point(data = DWH, aes(lon, lat), shape = 8, size = 2.6, stroke = 0.9) +
   annotate("text", x = DWH$lon + 0.3, y = DWH$lat - 0.45, label = "DWH", size = FONT_PT / .pt, family = SANS, hjust = 0) +
+  # stations searched with no cobia, as background for where larvae were absent
+  geom_point(data = no_cobia, aes(lon, lat, colour = "No cobia"), size = 0.35, alpha = 0.6,
+             shape = 16, show.legend = TRUE) +
   # smallest drawn last so they are not buried under the commoner medium tows
   geom_point(data = gulf %>% filter(!is.na(size_class)) %>%
                arrange(desc(as.integer(size_class)), desc(n_total)),
              aes(lon, lat, size = n_total, colour = size_class), alpha = 0.75) +
-  scale_colour_manual(values = SIZE_COLS, name = "Most of the tow", drop = FALSE) +
+  scale_colour_manual(values = c(SIZE_COLS, "No cobia" = "grey30"), name = "Most of the tow",
+                      breaks = c(SIZE_LEVELS, "No cobia"), drop = FALSE) +
   scale_size_binned(breaks = c(1, 5, 20, 100), range = c(1.2, 6.5), name = "Larvae per tow",
                     nice.breaks = FALSE) +
-  guides(colour = guide_legend(order = 1, override.aes = list(size = 3.6, alpha = 1)),
+  guides(colour = guide_legend(order = 1, override.aes = list(size = c(3.6, 3.6, 3.6, 1), alpha = 1)),
          size = guide_bins(order = 2, override.aes = list(colour = "grey45"))) +
   map_frame +
-  theme(panel.background = element_rect(fill = "#dbe9f6"), legend.box = "horizontal",
+  theme(panel.background = element_rect(fill = "#EEF4FA"), legend.box = "horizontal",
         legend.box.just = "top", legend.spacing.x = unit(10, "pt"))
 p_dist
 ```
@@ -237,13 +248,13 @@ frame <- list(geom_sf(data = filter(iso, depth_m == 200), colour = "grey35", lin
               map_frame, theme(panel.background = element_rect(fill = "white")),
               theme(plot.title = element_text(size = FONT_PT, face = "plain")))
 p_eff <- ggplot() + geom_tile(data = cells, aes(cx, cy, fill = n_tows)) +
-  scale_fill_viridis_c(trans = "log10", option = "mako", direction = -1,
+  scale_fill_distiller(trans = "log10", palette = "Blues", direction = 1,
                        name = "Sorted June-July\ndeployments", breaks = c(1, 10, 100)) +
   frame + ggtitle("June-July sampling")
 p_rate <- ggplot() +
   geom_tile(data = filter(cells, searched, n_larvae == 0), aes(cx, cy), fill = "grey88") +
   geom_tile(data = filter(cells, n_larvae > 0), aes(cx, cy, fill = per_100)) +
-  scale_fill_viridis_c(trans = "sqrt", option = "inferno", direction = -1,
+  scale_fill_viridis_c(trans = "sqrt", option = "viridis", direction = -1,
                        name = "Cobia larvae per\n100 deployments", breaks = c(10, 100, 300)) +
   frame + ggtitle("June-July catch rate")
 p_eff | p_rate
@@ -372,7 +383,7 @@ p_diel <- diel %>% pivot_longer(c(day, night), names_to = "tod", values_to = "pe
   ggplot(aes(size, per_100, fill = tod)) +
   geom_col(position = "dodge", colour = "grey20", linewidth = 0.2, width = 0.7) +
   facet_wrap(~ gear, scales = "free_y") +
-  scale_fill_manual(values = c(day = "#E8C547", night = "#2F4858"), name = NULL,
+  scale_fill_manual(values = c(day = "#FDE725", night = "#3B528B"), name = NULL,
                     labels = c(day = "Day", night = "Night")) +
   scale_x_discrete(labels = c("<5", "5\u201315", ">15")) +
   labs(x = "Larval length (mm)", y = "Measured larvae per 100 deployments")
@@ -431,7 +442,7 @@ p_temp <- bind_rows(
   ggplot(aes(t, after_stat(density), fill = set)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.55,
                  colour = "grey20", linewidth = 0.2) +
-  scale_fill_manual(values = c("All sorted tows" = "grey60", "Larvae" = "#C1442E"), name = NULL) +
+  scale_fill_manual(values = c("All sorted tows" = "grey60", "Larvae" = "#21908C"), name = NULL) +
   labs(x = "Surface temperature (°C)", y = "Density")
 p_temp
 ```
