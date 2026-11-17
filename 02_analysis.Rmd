@@ -180,8 +180,8 @@ p_dist <- ggplot() +
 p_dist
 ```
 
-The supplemental map repeats Fig. 1 over the cumulative surface oiling of the Deepwater Horizon
-spill: the number of days, 24 April to 11 August 2010, on which synthetic aperture radar detected
+The journal Fig. 1 shows the same records over the cumulative surface oiling of the Deepwater
+Horizon spill in place of the depth shading: the number of days, 24 April to 11 August 2010, on which synthetic aperture radar detected
 surface oil (TCNNA SAR days of oiling, NRDA cumulative oiling workgroup; downloaded from NOAA
 ERMA as `All_SARDays_020515.zip`). The 50-m raster is reduced to about 2 km, keeping the maximum
 days of oiling in each cell; the reduced copy is written once to `data/derived`.
@@ -205,11 +205,15 @@ p_oil <- ggplot() +
                       guide = guide_colourbar(order = 3, barwidth = unit(80, "pt"),
                                               barheight = unit(6, "pt"))) +
   geom_sf(data = filter(iso, depth_m == 200), colour = "grey20", linewidth = 0.35) +
+  geom_sf(data = filter(iso, depth_m > 200), colour = "grey35", linewidth = 0.2,
+          linetype = "dotted") +
   geom_sf(data = land, fill = "grey85", colour = "grey40", linewidth = 0.2) +
   ggnewscale::new_scale_fill() +
   geom_point(data = no_cobia, aes(lon, lat, fill = "No cobia"), size = 0.35, alpha = 0.6,
              shape = 21, stroke = 0) +
   geom_point(data = DWH, aes(lon, lat), shape = 8, size = 2.6, stroke = 0.9) +
+  annotate("text", x = DWH$lon + 0.3, y = DWH$lat - 0.45, label = "DWH", size = FONT_PT / .pt,
+           family = SANS, fontface = FONT_FACE, hjust = 0) +
   geom_point(data = gulf %>% filter(!is.na(size_class)) %>%
                arrange(desc(as.integer(size_class)), desc(n_total)),
              aes(lon, lat, size = n_total, fill = size_class), shape = 21, colour = "grey15",
@@ -546,9 +550,9 @@ save_fig <- function(p, name, w, h) {
 }
 diel_letters <- tibble(gear = c("Bongo", "Neuston"), lab = c("A", "B"))
 
-save_fig(p_dist + theme(legend.box = "vertical", legend.box.just = "left",
-                         legend.spacing.y = unit(2, "pt"), plot.margin = margin(2, 20, 2, 2)),
-         "fig1_distribution", 7, 5)   # legends stacked to fit the 7 in page width
+save_fig(p_oil + theme(legend.box = "vertical", legend.box.just = "left",
+                        legend.spacing.y = unit(2, "pt"), plot.margin = margin(2, 20, 2, 2)),
+         "fig1_distribution", 7, 5)   # p_oil: records over DWH oiling (p_dist above is the depth-shaded version)
 save_fig(p_season, "fig2_season", 5, 2.6)
 save_fig((p_eff + panel_letter("A")) / (p_rate + panel_letter("B")), "fig3_june_july_maps", 7, 7.6)
 save_fig(p_bar, "fig4_shelf_rates", 3.5, 3)                 # repeats Table 2; candidate to drop
@@ -560,9 +564,6 @@ save_fig(p_diel + geom_label(data = diel_letters, aes(x = -Inf, y = Inf, label =
            theme(strip.text = element_text(hjust = 0.5)),
          "fig6_day_night", 7, 3)   # repeats Table 3; candidate to drop
 save_fig(p_temp, "fig7_temperature", 3.5, 2.8)
-save_fig(p_oil + theme(legend.box = "vertical", legend.box.just = "left",
-                        legend.spacing.y = unit(2, "pt"), plot.margin = margin(2, 20, 2, 2)),
-         "figS1_oiling", 7, 5)
 list.files(dir_journal)
 ```
 
