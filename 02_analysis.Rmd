@@ -39,11 +39,10 @@ SIZE_COLS   <- c("Small (<5 mm)" = "#FDE725", "Medium (5-15 mm)" = "#21908C",
 # Fishery Bulletin figure rules: one sans-serif size for every label, no bold or italic, no
 # background grid, no box around graphs (axis lines and ticks only), panel letters in bold Times
 # New Roman, slightly larger, inside the upper left of each panel.
-# Labels are set bold at 10 pt to match the authors' other figures. The guidelines ask for plain
-# (not bold) labels, so set FONT_FACE <- "plain" if the journal asks for it.
+# Labels are 10 pt (panel letters 12 pt) so they read at print size; plain face, as the journal asks.
 FONT_PT   <- 10
 TAG_PT    <- 12
-FONT_FACE <- "bold"
+FONT_FACE <- "plain"
 SANS     <- "Arial"
 SERIF    <- "Times New Roman"
 theme_set(theme_classic(base_size = FONT_PT, base_family = SANS) +
