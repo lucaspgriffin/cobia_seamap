@@ -39,16 +39,21 @@ SIZE_COLS   <- c("Small (<5 mm)" = "#FDE725", "Medium (5-15 mm)" = "#21908C",
 # Fishery Bulletin figure rules: one sans-serif size for every label, no bold or italic, no
 # background grid, no box around graphs (axis lines and ticks only), panel letters in bold Times
 # New Roman, slightly larger, inside the upper left of each panel.
-FONT_PT  <- 8
-TAG_PT   <- 11
+# Labels are set bold at 10 pt to match the authors' other figures. The guidelines ask for plain
+# (not bold) labels, so set FONT_FACE <- "plain" if the journal asks for it.
+FONT_PT   <- 10
+TAG_PT    <- 12
+FONT_FACE <- "bold"
 SANS     <- "Arial"
 SERIF    <- "Times New Roman"
 theme_set(theme_classic(base_size = FONT_PT, base_family = SANS) +
-  theme(text = element_text(size = FONT_PT, colour = "black"),
-        axis.text = element_text(size = FONT_PT, colour = "black"),
-        axis.title = element_text(size = FONT_PT), legend.text = element_text(size = FONT_PT),
-        legend.title = element_text(size = FONT_PT), strip.text = element_text(size = FONT_PT),
-        plot.title = element_text(size = FONT_PT, face = "plain"),
+  theme(text = element_text(size = FONT_PT, colour = "black", face = FONT_FACE),
+        axis.text = element_text(size = FONT_PT, colour = "black", face = FONT_FACE),
+        axis.title = element_text(size = FONT_PT, face = FONT_FACE),
+        legend.text = element_text(size = FONT_PT, face = FONT_FACE),
+        legend.title = element_text(size = FONT_PT, face = FONT_FACE),
+        strip.text = element_text(size = FONT_PT, face = FONT_FACE),
+        plot.title = element_text(size = FONT_PT, face = FONT_FACE),
         strip.background = element_blank(), axis.line = element_line(linewidth = 0.3),
         axis.ticks = element_line(linewidth = 0.3), legend.position = "bottom",
         legend.key.height = unit(8, "pt")))
@@ -90,14 +95,18 @@ land <- ne_countries(scale = "medium", returnclass = "sf") %>% st_make_valid() %
   st_crop(st_bbox(c(xmin = BOX$lon[1], xmax = BOX$lon[2],
                     ymin = BOX$lat[1], ymax = BOX$lat[2]), crs = st_crs(4326)))
 # Maps keep a neat line; the journal asks for a north arrow and a scale bar in km on every map.
+# Degree labels as plain text: coord_sf's default plotmath labels ignore the bold face.
 map_frame <- list(coord_sf(xlim = BOX$lon, ylim = MAP_LAT, expand = FALSE), labs(x = NULL, y = NULL),
+                  scale_x_continuous(labels = function(x) paste0(abs(x), "\u00b0W")),
+                  scale_y_continuous(labels = function(y) paste0(y, "\u00b0N")),
                   annotation_north_arrow(location = "tr", height = unit(18, "pt"),
                                          width = unit(12, "pt"), pad_x = unit(4, "pt"),
                                          pad_y = unit(4, "pt"),
                                          style = north_arrow_orienteering(text_size = FONT_PT,
-                                                                          text_family = SANS)),
+                                                                          text_family = SANS,
+                                                                          text_face = FONT_FACE)),
                   annotation_scale(location = "br", unit_category = "metric", width_hint = 0.2,
-                                   text_cex = FONT_PT / 12, text_family = SANS,
+                                   text_cex = FONT_PT / 12, text_family = SANS, text_face = FONT_FACE,
                                    height = unit(3, "pt"), pad_x = unit(6, "pt"),
                                    pad_y = unit(6, "pt"), bar_cols = c("black", "white")),
                   theme(panel.grid = element_blank(), axis.line = element_blank(),
@@ -139,14 +148,15 @@ p_dist <- ggplot() +
   geom_raster(data = bathy, aes(lon, lat, fill = z), interpolate = TRUE) +
   scale_fill_gradient(low = "#6A93BF", high = "#EEF4FA", name = "Depth (m)",
                       labels = function(x) -x, breaks = c(0, -3000, -6000),
-                      guide = guide_colourbar(order = 3, barwidth = unit(48, "pt"),
+                      guide = guide_colourbar(order = 3, barwidth = unit(80, "pt"),
                                               barheight = unit(6, "pt"))) +
   geom_sf(data = filter(iso, depth_m == 200), colour = "grey20", linewidth = 0.35) +
   geom_sf(data = filter(iso, depth_m > 200), colour = "grey35", linewidth = 0.2,
           linetype = "dotted") +
   geom_sf(data = land, fill = "grey85", colour = "grey40", linewidth = 0.2) +
   geom_point(data = DWH, aes(lon, lat), shape = 8, size = 2.6, stroke = 0.9) +
-  annotate("text", x = DWH$lon + 0.3, y = DWH$lat - 0.45, label = "DWH", size = FONT_PT / .pt, family = SANS, hjust = 0) +
+  annotate("text", x = DWH$lon + 0.3, y = DWH$lat - 0.45, label = "DWH", size = FONT_PT / .pt, family = SANS,
+           fontface = FONT_FACE, hjust = 0) +
   # stations searched with no cobia, as background for where larvae were absent
   # the raster used the fill scale, so start a new one for the points
   ggnewscale::new_scale_fill() +
@@ -193,7 +203,7 @@ p_oil <- ggplot() +
   geom_raster(data = oil, aes(lon, lat, fill = days)) +
   scale_fill_gradient(low = "grey88", high = "grey25", name = "Days of\nsurface oil",
                       breaks = c(1, 20, 40, 59),
-                      guide = guide_colourbar(order = 3, barwidth = unit(48, "pt"),
+                      guide = guide_colourbar(order = 3, barwidth = unit(80, "pt"),
                                               barheight = unit(6, "pt"))) +
   geom_sf(data = filter(iso, depth_m == 200), colour = "grey20", linewidth = 0.35) +
   geom_sf(data = land, fill = "grey85", colour = "grey40", linewidth = 0.2) +
@@ -300,7 +310,7 @@ sprintf("cells with >=10 June-July tows: %d; of those with no cobia: %d",
 frame <- list(geom_sf(data = filter(iso, depth_m == 200), colour = "grey35", linewidth = 0.3),
               geom_sf(data = land, fill = "grey85", colour = "grey40", linewidth = 0.2),
               map_frame, theme(panel.background = element_rect(fill = "white")),
-              theme(plot.title = element_text(size = FONT_PT, face = "plain")))
+              theme(plot.title = element_text(size = FONT_PT, face = FONT_FACE)))
 p_eff <- ggplot() + geom_tile(data = cells, aes(cx, cy, fill = n_tows)) +
   scale_fill_distiller(trans = "log10", palette = "Blues", direction = 1,
                        name = "Sorted June-July\ndeployments", breaks = c(1, 10, 100)) +
@@ -357,7 +367,8 @@ p_bar <- ggplot(reg, aes(reorder(str_remove(region, " shelf"), -rate), rate)) +
   geom_col(fill = "#0072B2", colour = "grey20", linewidth = 0.2, width = 0.6) +
   geom_errorbar(aes(ymin = lo, ymax = hi), width = 0.15, linewidth = 0.4) +
   geom_text(aes(y = hi, label = sprintf("%d tows\n%.0f larvae", tows, larvae)),
-            vjust = -0.3, size = FONT_PT / .pt, family = SANS, lineheight = 0.95) +
+            vjust = -0.3, size = FONT_PT / .pt, family = SANS, fontface = FONT_FACE,
+            lineheight = 0.95) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.28))) +
   labs(x = NULL, y = "Larvae per 100 shelf tows,\nJune-July 1982-2016")
 p_bar
@@ -440,7 +451,8 @@ p_diel <- diel %>% pivot_longer(c(day, night), names_to = "tod", values_to = "pe
   scale_fill_manual(values = c(day = "#FDE725", night = "#3B528B"), name = NULL,
                     labels = c(day = "Day", night = "Night")) +
   scale_x_discrete(labels = c("<5", "5\u201315", ">15")) +
-  labs(x = "Larval length (mm)", y = "Measured larvae per 100 deployments")
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +   # room for the panel letters
+  labs(x = "Larval length (mm)", y = "Measured larvae per\n100 deployments")
 p_diel
 ```
 
@@ -536,7 +548,7 @@ save_fig <- function(p, name, w, h) {
 diel_letters <- tibble(gear = c("Bongo", "Neuston"), lab = c("A", "B"))
 
 save_fig(p_dist + theme(legend.box = "vertical", legend.box.just = "left",
-                         legend.spacing.y = unit(2, "pt"), plot.margin = margin(2, 12, 2, 2)),
+                         legend.spacing.y = unit(2, "pt"), plot.margin = margin(2, 20, 2, 2)),
          "fig1_distribution", 7, 5)   # legends stacked to fit the 7 in page width
 save_fig(p_season, "fig2_season", 5, 2.6)
 save_fig((p_eff + panel_letter("A")) / (p_rate + panel_letter("B")), "fig3_june_july_maps", 7, 7.6)
@@ -550,7 +562,7 @@ save_fig(p_diel + geom_label(data = diel_letters, aes(x = -Inf, y = Inf, label =
          "fig6_day_night", 7, 3)   # repeats Table 3; candidate to drop
 save_fig(p_temp, "fig7_temperature", 3.5, 2.8)
 save_fig(p_oil + theme(legend.box = "vertical", legend.box.just = "left",
-                        legend.spacing.y = unit(2, "pt"), plot.margin = margin(2, 12, 2, 2)),
+                        legend.spacing.y = unit(2, "pt"), plot.margin = margin(2, 20, 2, 2)),
          "figS1_oiling", 7, 5)
 list.files(dir_journal)
 ```
