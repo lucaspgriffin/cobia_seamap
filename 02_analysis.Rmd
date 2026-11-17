@@ -165,6 +165,50 @@ p_dist <- ggplot() +
 p_dist
 ```
 
+The supplemental map repeats Fig. 1 over the cumulative surface oiling of the Deepwater Horizon
+spill: the number of days, 24 April to 11 August 2010, on which synthetic aperture radar detected
+surface oil (TCNNA SAR days of oiling, NRDA cumulative oiling workgroup; downloaded from NOAA
+ERMA as `All_SARDays_020515.zip`). The 50-m raster is reduced to about 2 km, keeping the maximum
+days of oiling in each cell; the reduced copy is written once to `data/derived`.
+
+```{r supp_oiling, fig.width = 9, fig.height = 5.6}
+oil_file <- file.path(dir_derived, "dwh_days_oiling_2km.tif")
+if (!file.exists(oil_file)) {
+  oil_raw <- rast("data/raw/dwh_oiling/All_SARDays_020515/AllSAR_0205.tif")
+  levels(oil_raw) <- NULL
+  oil_agg <- aggregate(oil_raw, fact = 40, fun = "max", na.rm = TRUE)
+  oil_agg[oil_agg == 0] <- NA
+  writeRaster(oil_agg, oil_file, overwrite = TRUE)
+}
+oil <- as.data.frame(rast(oil_file), xy = TRUE) %>% set_names(c("lon", "lat", "days"))
+# Cell maxima overstate the oiled area, so no area is quoted from this layer.
+
+p_oil <- ggplot() +
+  geom_raster(data = oil, aes(lon, lat, fill = days)) +
+  scale_fill_gradient(low = "grey88", high = "grey25", name = "Days of\nsurface oil",
+                      breaks = c(1, 20, 40, 59),
+                      guide = guide_colourbar(order = 3, barwidth = unit(48, "pt"),
+                                              barheight = unit(6, "pt"))) +
+  geom_sf(data = filter(iso, depth_m == 200), colour = "grey20", linewidth = 0.35) +
+  geom_sf(data = land, fill = "grey85", colour = "grey40", linewidth = 0.2) +
+  geom_point(data = no_cobia, aes(lon, lat, colour = "No cobia"), size = 0.35, alpha = 0.6,
+             shape = 16) +
+  geom_point(data = DWH, aes(lon, lat), shape = 8, size = 2.6, stroke = 0.9) +
+  geom_point(data = gulf %>% filter(!is.na(size_class)) %>%
+               arrange(desc(as.integer(size_class)), desc(n_total)),
+             aes(lon, lat, size = n_total, colour = size_class), alpha = 0.8) +
+  scale_colour_manual(values = c(SIZE_COLS, "No cobia" = "grey30"), name = "Most of the tow",
+                      breaks = c(SIZE_LEVELS, "No cobia"), drop = FALSE) +
+  scale_size_binned(breaks = c(1, 5, 20, 100), range = c(1.2, 6.5), name = "Larvae per tow",
+                    nice.breaks = FALSE) +
+  guides(colour = guide_legend(order = 1, override.aes = list(size = c(3.6, 3.6, 3.6, 1), alpha = 1)),
+         size = guide_bins(order = 2, override.aes = list(colour = "grey45"))) +
+  map_frame +
+  theme(panel.background = element_rect(fill = "white"), legend.box = "horizontal",
+        legend.box.just = "top", legend.spacing.x = unit(10, "pt"))
+p_oil
+```
+
 # Season
 
 This section uses only shelf stations from 1982 to 2016, so every month covers the same area and the
@@ -495,6 +539,9 @@ save_fig(p_diel + geom_label(data = diel_letters, aes(x = -Inf, y = Inf, label =
            theme(strip.text = element_text(hjust = 0.5)),
          "fig6_day_night", 7, 3)   # repeats Table 3; candidate to drop
 save_fig(p_temp, "fig7_temperature", 3.5, 2.8)
+save_fig(p_oil + theme(legend.box = "vertical", legend.box.just = "left",
+                        legend.spacing.y = unit(2, "pt"), plot.margin = margin(2, 12, 2, 2)),
+         "figS1_oiling", 7, 5)
 list.files(dir_journal)
 ```
 
