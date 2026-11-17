@@ -32,7 +32,8 @@ DWH     <- tibble(lon = -88.3660, lat = 28.7366)      # Deepwater Horizon wellhe
 
 SIZE_LEVELS <- c("Small (<5 mm)", "Medium (5-15 mm)", "Large (>15 mm)")
 # Size classes are ordered, so they run light to dark along viridis.
-SIZE_COLS   <- c("Small (<5 mm)" = "#7AD151", "Medium (5-15 mm)" = "#21908C",
+# Points carry a thin dark outline so the pale yellow end stays visible on light backgrounds.
+SIZE_COLS   <- c("Small (<5 mm)" = "#FDE725", "Medium (5-15 mm)" = "#21908C",
                  "Large (>15 mm)" = "#3B0F70")
 
 # Fishery Bulletin figure rules: one sans-serif size for every label, no bold or italic, no
@@ -147,18 +148,23 @@ p_dist <- ggplot() +
   geom_point(data = DWH, aes(lon, lat), shape = 8, size = 2.6, stroke = 0.9) +
   annotate("text", x = DWH$lon + 0.3, y = DWH$lat - 0.45, label = "DWH", size = FONT_PT / .pt, family = SANS, hjust = 0) +
   # stations searched with no cobia, as background for where larvae were absent
-  geom_point(data = no_cobia, aes(lon, lat, colour = "No cobia"), size = 0.35, alpha = 0.6,
-             shape = 16, show.legend = TRUE) +
+  # the raster used the fill scale, so start a new one for the points
+  ggnewscale::new_scale_fill() +
+  geom_point(data = no_cobia, aes(lon, lat, fill = "No cobia"), size = 0.35, alpha = 0.6,
+             shape = 21, stroke = 0, show.legend = TRUE) +
   # smallest drawn last so they are not buried under the commoner medium tows
   geom_point(data = gulf %>% filter(!is.na(size_class)) %>%
                arrange(desc(as.integer(size_class)), desc(n_total)),
-             aes(lon, lat, size = n_total, colour = size_class), alpha = 0.75) +
-  scale_colour_manual(values = c(SIZE_COLS, "No cobia" = "grey30"), name = "Most of the tow",
-                      breaks = c(SIZE_LEVELS, "No cobia"), drop = FALSE) +
+             aes(lon, lat, size = n_total, fill = size_class), shape = 21, colour = "grey15",
+             stroke = 0.3, alpha = 0.75) +
+  scale_fill_manual(values = c(SIZE_COLS, "No cobia" = "grey30"), name = "Most of the tow",
+                    breaks = c(SIZE_LEVELS, "No cobia"), drop = FALSE) +
   scale_size_binned(breaks = c(1, 5, 20, 100), range = c(1.2, 6.5), name = "Larvae per tow",
                     nice.breaks = FALSE) +
-  guides(colour = guide_legend(order = 1, override.aes = list(size = c(3.6, 3.6, 3.6, 1), alpha = 1)),
-         size = guide_bins(order = 2, override.aes = list(colour = "grey45"))) +
+  guides(fill = guide_legend(order = 1, override.aes = list(size = c(3.6, 3.6, 3.6, 1), alpha = 1,
+                                                            colour = c(rep("grey15", 3), NA))),
+         size = guide_bins(order = 2, override.aes = list(shape = 21, fill = "grey70",
+                                                          colour = "grey15", stroke = 0.3))) +
   map_frame +
   theme(panel.background = element_rect(fill = "#EEF4FA"), legend.box = "horizontal",
         legend.box.just = "top", legend.spacing.x = unit(10, "pt"))
@@ -191,18 +197,22 @@ p_oil <- ggplot() +
                                               barheight = unit(6, "pt"))) +
   geom_sf(data = filter(iso, depth_m == 200), colour = "grey20", linewidth = 0.35) +
   geom_sf(data = land, fill = "grey85", colour = "grey40", linewidth = 0.2) +
-  geom_point(data = no_cobia, aes(lon, lat, colour = "No cobia"), size = 0.35, alpha = 0.6,
-             shape = 16) +
+  ggnewscale::new_scale_fill() +
+  geom_point(data = no_cobia, aes(lon, lat, fill = "No cobia"), size = 0.35, alpha = 0.6,
+             shape = 21, stroke = 0) +
   geom_point(data = DWH, aes(lon, lat), shape = 8, size = 2.6, stroke = 0.9) +
   geom_point(data = gulf %>% filter(!is.na(size_class)) %>%
                arrange(desc(as.integer(size_class)), desc(n_total)),
-             aes(lon, lat, size = n_total, colour = size_class), alpha = 0.8) +
-  scale_colour_manual(values = c(SIZE_COLS, "No cobia" = "grey30"), name = "Most of the tow",
-                      breaks = c(SIZE_LEVELS, "No cobia"), drop = FALSE) +
+             aes(lon, lat, size = n_total, fill = size_class), shape = 21, colour = "grey15",
+             stroke = 0.3, alpha = 0.8) +
+  scale_fill_manual(values = c(SIZE_COLS, "No cobia" = "grey30"), name = "Most of the tow",
+                    breaks = c(SIZE_LEVELS, "No cobia"), drop = FALSE) +
   scale_size_binned(breaks = c(1, 5, 20, 100), range = c(1.2, 6.5), name = "Larvae per tow",
                     nice.breaks = FALSE) +
-  guides(colour = guide_legend(order = 1, override.aes = list(size = c(3.6, 3.6, 3.6, 1), alpha = 1)),
-         size = guide_bins(order = 2, override.aes = list(colour = "grey45"))) +
+  guides(fill = guide_legend(order = 1, override.aes = list(size = c(3.6, 3.6, 3.6, 1), alpha = 1,
+                                                            colour = c(rep("grey15", 3), NA))),
+         size = guide_bins(order = 2, override.aes = list(shape = 21, fill = "grey70",
+                                                          colour = "grey15", stroke = 0.3))) +
   map_frame +
   theme(panel.background = element_rect(fill = "white"), legend.box = "horizontal",
         legend.box.just = "top", legend.spacing.x = unit(10, "pt"))
@@ -368,9 +378,9 @@ by_depth %>% filter(month %in% 4:10) %>% count(month, size) %>%
 ```
 
 ```{r main_size_depth, fig.width = 5, fig.height = 3.4}
-p_size <- ggplot(by_depth, aes(sta_depth_m, length_mm, colour = size)) +
-  geom_point(alpha = 0.45, size = 1.4) +
-  scale_colour_manual(values = SIZE_COLS, guide = "none") +
+p_size <- ggplot(by_depth, aes(sta_depth_m, length_mm, fill = size)) +
+  geom_point(shape = 21, colour = "grey20", stroke = 0.2, alpha = 0.6, size = 1.5) +
+  scale_fill_manual(values = SIZE_COLS, guide = "none") +
   scale_x_log10(breaks = c(10, 30, 100, 300, 1000, 3000)) +
   geom_vline(xintercept = SHELF_M, linetype = "dashed", colour = "grey40") +
   labs(x = "Station depth (m, log scale)", y = "Larval length (mm)")
