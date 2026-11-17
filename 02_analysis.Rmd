@@ -140,7 +140,7 @@ sizes are binned, because on a continuous scale that one tow would make every ot
 # Sorted bongo or neuston deployments at stations where no gear caught cobia.
 no_cobia <- effort %>% filter(!v_c_p %in% records$v_c_p) %>%
   filter(lon >= BOX$lon[1], lon <= BOX$lon[2], lat >= BOX$lat[1], lat <= BOX$lat[2]) %>%
-  distinct(lon = round(lon, 2), lat = round(lat, 2))
+  distinct(lon = round(lon, 1), lat = round(lat, 1))   # one dot per ~10 km, so repeat visits do not smudge
 sprintf("stations with no cobia: %d deployments, %d distinct positions",
         sum(!effort$v_c_p %in% records$v_c_p), nrow(no_cobia))
 p_dist <- ggplot() +
@@ -203,37 +203,48 @@ p_oil <- ggplot() +
   geom_raster(data = bathy, aes(lon, lat, fill = z), interpolate = TRUE) +
   scale_fill_gradient(low = "#6A93BF", high = "#EEF4FA", name = "Depth (m)",
                       labels = function(x) -x, breaks = c(0, -3000, -6000),
-                      guide = guide_colourbar(order = 4, barwidth = unit(80, "pt"),
-                                              barheight = unit(6, "pt"))) +
+                      guide = guide_colourbar(order = 4, position = "inside", direction = "horizontal",
+                                              barwidth = unit(80, "pt"), barheight = unit(6, "pt"),
+                                              theme = theme(legend.title.position = "top"))) +
   geom_raster(data = oil, aes(lon, lat, alpha = days), fill = "grey10") +
   scale_alpha_continuous(range = c(0.12, 0.7), limits = c(1, 59), breaks = c(1, 20, 40, 59),
-                         name = "Days of\nsurface oil",
-                         guide = guide_legend(order = 3, override.aes = list(fill = "grey10"))) +
+                         name = "Days of surface oil",
+                         guide = guide_legend(order = 3, position = "inside", nrow = 1, direction = "horizontal",
+                                              override.aes = list(fill = "grey10"),
+                                              theme = theme(legend.title.position = "top"))) +
   geom_sf(data = filter(iso, depth_m == 200), colour = "grey20", linewidth = 0.35) +
   geom_sf(data = filter(iso, depth_m > 200), colour = "grey35", linewidth = 0.2,
           linetype = "dotted") +
   geom_sf(data = land, fill = "grey85", colour = "grey40", linewidth = 0.2) +
   ggnewscale::new_scale_fill() +
-  geom_point(data = no_cobia, aes(lon, lat, fill = "No cobia"), size = 0.35, alpha = 0.6,
+  geom_point(data = no_cobia, aes(lon, lat, fill = "No cobia"), size = 0.6, alpha = 0.75,
              shape = 21, stroke = 0) +
   geom_point(data = DWH, aes(lon, lat), shape = 8, size = 2.6, stroke = 0.9) +
-  annotate("text", x = DWH$lon + 0.3, y = DWH$lat - 0.45, label = "DWH", size = FONT_PT / .pt,
-           family = SANS, fontface = FONT_FACE, hjust = 0) +
+  annotate("label", x = DWH$lon + 0.3, y = DWH$lat - 0.45, label = "DWH", size = FONT_PT / .pt,
+           family = SANS, fontface = FONT_FACE, hjust = 0, fill = alpha("white", 0.75),
+           border.colour = NA, label.padding = unit(1.2, "pt")) +
   geom_point(data = gulf %>% filter(!is.na(size_class)) %>%
                arrange(desc(as.integer(size_class)), desc(n_total)),
              aes(lon, lat, size = n_total, fill = size_class), shape = 21, colour = "grey15",
              stroke = 0.3, alpha = 0.8) +
-  scale_fill_manual(values = c(SIZE_COLS, "No cobia" = "grey30"), name = "Most of the tow",
+  scale_fill_manual(values = c(SIZE_COLS, "No cobia" = "grey30"), name = "Dominant size class",
                     breaks = c(SIZE_LEVELS, "No cobia"), drop = FALSE) +
   scale_size_binned(breaks = c(1, 5, 20, 100), range = c(1.2, 6.5), name = "Larvae per tow",
                     nice.breaks = FALSE) +
-  guides(fill = guide_legend(order = 1, override.aes = list(size = c(3.6, 3.6, 3.6, 1), alpha = 1,
-                                                            colour = c(rep("grey15", 3), NA))),
+  guides(fill = guide_legend(order = 1, nrow = 2, byrow = TRUE,
+                             override.aes = list(size = c(3.6, 3.6, 3.6, 1.4), alpha = 1,
+                                                 colour = c(rep("grey15", 3), NA))),
          size = guide_bins(order = 2, override.aes = list(shape = 21, fill = "grey70",
                                                           colour = "grey15", stroke = 0.3))) +
   map_frame +
+  # depth and oil scales sit in the empty deep basin; point legends go in one row underneath
   theme(panel.background = element_rect(fill = "#EEF4FA"), legend.box = "horizontal",
-        legend.box.just = "top", legend.spacing.x = unit(10, "pt"))
+        legend.box.just = "top", legend.spacing.x = unit(18, "pt"),
+        legend.title.position = "top",
+        legend.key = element_rect(fill = NA, colour = NA),
+        legend.position.inside = c(0.015, 0.02), legend.justification.inside = c(0, 0),
+        legend.box.background = element_blank(),
+        legend.background = element_rect(fill = alpha("white", 0.8), colour = NA))
 p_oil
 ```
 
@@ -555,9 +566,8 @@ save_fig <- function(p, name, w, h) {
 }
 diel_letters <- tibble(gear = c("Bongo", "Neuston"), lab = c("A", "B"))
 
-save_fig(p_oil + theme(legend.box = "vertical", legend.box.just = "left",
-                        legend.spacing.y = unit(2, "pt"), plot.margin = margin(2, 20, 2, 2)),
-         "fig1_distribution", 7, 5.7)   # p_oil: records over DWH oiling (p_dist above is the depth-shaded version)
+save_fig(p_oil + theme(plot.margin = margin(2, 20, 2, 2)),
+         "fig1_distribution", 7, 4.6)   # p_oil: records over DWH oiling (p_dist above is the depth-shaded version)
 save_fig(p_season, "fig2_season", 5, 2.6)
 save_fig((p_eff + panel_letter("A")) / (p_rate + panel_letter("B")), "fig3_june_july_maps", 7, 7.6)
 save_fig(p_bar, "fig4_shelf_rates", 3.5, 3)                 # repeats Table 2; candidate to drop
