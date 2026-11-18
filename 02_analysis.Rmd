@@ -121,6 +121,67 @@ sprintf("off-gear or unsorted, kept on the map but out of every rate: %d records
         nrow(gulf) - nrow(rates), sum(gulf$n_total) - sum(rates$n_total))
 ```
 
+# Surveys (Table 1)
+
+Each cruise carries a SEAMAP time-series code, `ITS_CODE`, in `ISTRWK`. The first two letters
+name the agency (US = NMFS; AL, FL, LA, MS = state) and the last two the survey series. The
+survey documentation defines the Fall Plankton set (US-FP, AL-FP, FL-FP, LA-FP, LA-LF, MS-FP).
+The other series are grouped below by their suffix, which matches the months and areas each code
+covers: SP spring plankton; SS and ES summer shrimp/groundfish trawl; FS and FG fall trawl; WP, WG,
+MG, MW and LA-LW winter. Codes outside these groups (special projects, squid and butterfish
+cruises, state spring cruises on the shelf) are "Other". The documentation calls `ITS_CODE`
+experimental, so the code-level table follows the summary for checking.
+
+```{r table1-surveys}
+SURVEY_OF <- c(
+  "US-FP" = "Fall plankton", "AL-FP" = "Fall plankton", "FL-FP" = "Fall plankton",
+  "LA-FP" = "Fall plankton", "LA-LF" = "Fall plankton", "MS-FP" = "Fall plankton",
+  "US-SP" = "Spring plankton", "FL-SP" = "Spring plankton",
+  "US-SS" = "Summer trawl", "MS-SS" = "Summer trawl", "FL-SS" = "Summer trawl",
+  "US-ES" = "Summer trawl", "FL-ES" = "Summer trawl", "AL-ES" = "Summer trawl",
+  "LA-LS" = "Summer trawl",
+  "US-FS" = "Fall trawl", "MS-FS" = "Fall trawl", "FL-FS" = "Fall trawl",
+  "LA-FS" = "Fall trawl", "US-FG" = "Fall trawl",
+  "US-WP" = "Winter", "US-WG" = "Winter", "US-MG" = "Winter", "LA-LW" = "Winter",
+  "MS-WP" = "Winter", "MS-MW" = "Winter")
+SURVEY_LEVELS <- c("Fall plankton", "Spring plankton", "Summer trawl", "Fall trawl", "Winter",
+                   "Other")
+
+effort <- effort %>%
+  mutate(survey = factor(coalesce(SURVEY_OF[its_code], "Other"), levels = SURVEY_LEVELS))
+
+# Month span: the months holding at least 1% of a survey's deployments, so a stray tow does not
+# stretch the range. Winter runs across the new year.
+month_span <- function(m) {
+  keep <- as.integer(names(which(prop.table(table(m)) >= 0.01)))
+  if (all(c(1, 12) %in% keep) && !all(1:12 %in% keep)) {
+    gap <- setdiff(1:12, keep)
+    paste0(month.abb[max(gap) %% 12 + 1], "–", month.abb[min(gap) - 1])
+  } else paste0(month.abb[min(keep)], "–", month.abb[max(keep)])
+}
+
+table1 <- effort %>%
+  group_by(survey) %>%
+  summarise(months = month_span(month), years = paste0(min(year), "–", max(year)),
+            deployments = n(),
+            pct_shelf = round(100 * mean(sta_depth_m > 0 & sta_depth_m <= SHELF_M, na.rm = TRUE)),
+            pct_west_88 = round(100 * mean(lon < -88)), .groups = "drop") %>%
+  mutate(pct = round(100 * deployments / sum(deployments), 1),
+         `Standard deployments (%)` = sprintf("%s (%.1f)", format(deployments, big.mark = ","), pct))
+write_csv(table1, file.path(dir_derived, "table1_surveys.csv"))
+table1
+
+# Florida-shelf years of the summer trawl series (east of 88 W)
+effort %>% filter(survey == "Summer trawl", lon >= -88) %>% count(year, name = "deployments")
+
+# Code-level detail behind each row
+effort %>%
+  group_by(survey, its_code) %>%
+  summarise(deployments = n(), months = month_span(month),
+            years = paste0(min(year), "–", max(year)), .groups = "drop") %>%
+  arrange(survey, desc(deployments))
+```
+
 # Distribution
 
 This map shows every record in the study area, colored by the size class that made up most of each

@@ -49,7 +49,7 @@ sample), and `V_C_P_S_CAT` (adds the catalog number), which links a length to a 
 | table | one row per | fields used |
 |---|---|---|
 | `STAREC` | station | date, time, position, depth, gears deployed |
-| `ISTRWK` | plankton sample | gear code, mesh, volume filtered, sorted flag |
+| `ISTRWK` | plankton sample | gear code, mesh, volume filtered, sorted flag, survey (`ITS_CODE`) |
 | `ISARWK` | taxon within a sample | counts, aliquot |
 | `ILFRWK` | measured larva | length |
 
@@ -132,6 +132,7 @@ SORTED <- c("1", "2", "4", "D")
 istrwk <- read_seamap("ISTRWK.csv") %>%
   transmute(v_c_p = V_C_P, v_c_p_s = V_C_P_S,   # V_C_P is 9 characters on a few stations
             gear = GEAR[GEAR_ICD], sort_ist = SORT_IST, vol_filt_m3 = as.numeric(VOL_FILT),
+            its_code = ITS_CODE,
             standard = (GEAR_ICD %in% c("01", "17") & MESH_ICD == "03") |
                        (GEAR_ICD %in% c("03", "08") & MESH_ICD == "09")) %>%
   mutate(gear = if_else(gear %in% c("Bongo", "Neuston") & !standard,
@@ -140,9 +141,15 @@ istrwk <- read_seamap("ISTRWK.csv") %>%
 count(istrwk, gear, name = "samples")
 
 # One deployment per station per gear class: a bongo pair and a double neuston frame each count once.
+# ITS_CODE (agency-time series, e.g. US-FP = NMFS Fall Plankton) names the survey each cruise
+# belonged to. 86 deployments have samples under two codes; the code on most samples is kept.
 effort <- istrwk %>%
   filter(gear %in% c("Bongo", "Neuston"), sort_ist %in% SORTED) %>%
-  distinct(v_c_p, gear) %>%
+  count(v_c_p, gear, its_code) %>%
+  group_by(v_c_p, gear) %>%
+  slice_max(n, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(-n) %>%
   inner_join(starec, by = "v_c_p") %>%
   filter(lon >= BOX$lon[1], lon <= BOX$lon[2], lat >= BOX$lat[1], lat <= BOX$lat[2]) %>%
   mutate(year  = year(date),
