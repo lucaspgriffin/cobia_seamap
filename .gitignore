@@ -1,0 +1,12 @@
+data/raw/*
+!data/raw/seamap/
+data/raw/seamap/*
+!data/raw/seamap/ENVREC_4DB.csv
+!data/raw/seamap/SID_OUT_09022025_ENV_CTD.docx
+data/derived/*
+!data/derived/dwh_days_oiling_2km.tif
+output/
+.Rproj.user
+.Rhistory
+.DS_Store
+~$*
