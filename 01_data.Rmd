@@ -29,14 +29,14 @@ the Gulf States Marine Fisheries Commission (https://seamapdata.gsmfc.org/pages/
 release of August 13, 2026. Choose the package on the form, download it, and unzip its contents
 into `data/raw/seamap/`.
 
-```{r data-check}
-want <- c("STAREC.csv", "ISTRWK.csv", "ISARWK.csv", "ILFRWK.csv", "ENVREC_4DB.csv")
-missing <- want[!file.exists(file.path(dir_seamap, want))]   # tables not yet in place
-if (length(missing) > 0) {
-  stop("Missing from data/raw/seamap/: ", paste(missing, collapse = ", "),
-       ". Download the Plankton Survey Data (CSV) package from the SEAMAP data download form ",
-       "and unzip it there.")
-}
+```{r data-files}
+# The five tables used here, from the Plankton Survey Data (CSV) package in data/raw/seamap/
+# STAREC.csv      stations: one row per station, with date, time, position, depth and surface temperature
+# ENVREC_4DB.csv  environment: one row per station (V_C_P), a few stations twice, with surface salinity, dissolved oxygen and turbidity
+# ISTRWK.csv      samples: one row per plankton sample, with gear, mesh, volume filtered, sorted flag and survey code
+# ISARWK.csv      catch: one row per catalog number within a sample (V_C_P_S_CAT), with larvae counted and the aliquot sorted;
+#                 one taxon can span several catalog numbers, so counts are summed by taxon
+# ILFRWK.csv      lengths: one row per measured larva, with body length in millimeters
 ```
 
 Tables are linked by `V_C_P` (vessel, cruise, station), `V_C_P_S` (adds the sample), and
