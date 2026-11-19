@@ -141,8 +141,9 @@ count(envrec, env_source, name = "stations")
 Effort is the standard SEAMAP tows defined in Section IV of the SEAMAP database documentation: the
 61- or 60-cm bongo with 0.333-mm mesh (gear 01 or 17, mesh 03) towed obliquely (tow pattern 01), and
 the single or double neuston net with 0.947-mm mesh (gear 03 or 08, mesh 09) towed at the surface
-(tow pattern 02), with a sorted status of 1, 2 or D to N. Larvae from other gears, meshes and tows
-stay on the distribution map but are left out of every rate.
+(tow pattern 02), with a sorted status of 1, 2 or D to N. Where both nets of a bongo pair or double
+neuston frame were sorted, only the primary net is used, as the documentation advises. Larvae from
+other gears, meshes, tows and second nets stay on the distribution map but are left out of every rate.
 
 ```{r effort}
 GEAR <- c("01" = "Bongo", "17" = "Bongo", "11" = "Bongo", "14" = "Bongo", "05" = "Bongo",
@@ -160,10 +161,14 @@ istrwk <- read_seamap("ISTRWK.csv") %>%
             its_code = ITS_CODE,
             # Standard tows: bongo with 0.333-mm mesh towed obliquely, neuston with 0.947-mm mesh at the surface
             standard = (GEAR_ICD %in% c("01", "17") & MESH_ICD == "03" & TOW_PATTERN %in% "01") |
-                       (GEAR_ICD %in% c("03", "08") & MESH_ICD == "09" & TOW_PATTERN %in% "02")) %>%
-  mutate(gear = if_else(gear %in% c("Bongo", "Neuston") & !standard,
-                        paste(gear, "(non-standard)"), gear)) %>%
-  select(-standard)
+                       (GEAR_ICD %in% c("03", "08") & MESH_ICD == "09" & TOW_PATTERN %in% "02"),
+            # Second net of a pair where both nets were sorted. SEAMAP documentation, Section IV:
+            # "If SORT_PAIR = 1 and SORT_PAIR_PRIMARY = 'S' then delete" (SP_PRISEC in this table)
+            second_net = as.numeric(SORT_PAIR) %in% 1 & SP_PRISEC %in% "S") %>%
+  mutate(gear = case_when(gear %in% c("Bongo", "Neuston") & !standard  ~ paste(gear, "(non-standard)"),
+                          gear %in% c("Bongo", "Neuston") & second_net ~ paste(gear, "(second net)"),
+                          TRUE                                         ~ gear)) %>%
+  select(-standard, -second_net)
 count(istrwk, gear, name = "samples")
 
 # One deployment per station per gear class: a bongo pair and a double neuston frame each count once.
@@ -206,7 +211,7 @@ ALIQ_MULT <- c("1/1" = 1, "1/2" = 2, "1/4" = 4, "1/8" = 8)
 
 catch <- read_seamap("ISARWK.csv") %>%
   filter(str_detect(toupper(TAXON), "^RACHYCENTR")) %>%
-  transmute(v_c_p = substr(V_C_P_S, 1, 10), v_c_p_s = V_C_P_S, v_c_p_s_cat = V_C_P_S_CAT,
+  transmute(v_c_p_s = V_C_P_S, v_c_p_s_cat = V_C_P_S_CAT,   # the station key comes from the sample table below
             taxon = TAXON, aliquot = ALIQUOT, sort_isa = SORT_ISA,
             n_sorted = coalesce(as.numeric(MEAS), 0) + coalesce(as.numeric(NOT_MEAS), 0),
             n_total  = n_sorted * coalesce(ALIQ_MULT[ALIQUOT], 1))
@@ -252,7 +257,7 @@ by_rec <- lengths %>%
 
 records <- catch %>%
   left_join(by_rec, by = "v_c_p_s_cat") %>%
-  left_join(istrwk %>% select(v_c_p_s, gear, sort_ist, vol_filt_m3), by = "v_c_p_s") %>%
+  left_join(istrwk %>% select(v_c_p_s, v_c_p, gear, sort_ist, vol_filt_m3), by = "v_c_p_s") %>%
   inner_join(starec, by = "v_c_p") %>%
   mutate(year  = year(date),
          month = month(date),

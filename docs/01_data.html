@@ -1789,8 +1789,10 @@ SEAMAP database documentation: the 61- or 60-cm bongo with 0.333-mm mesh
 (gear 01 or 17, mesh 03) towed obliquely (tow pattern 01), and the
 single or double neuston net with 0.947-mm mesh (gear 03 or 08, mesh 09)
 towed at the surface (tow pattern 02), with a sorted status of 1, 2 or D
-to N. Larvae from other gears, meshes and tows stay on the distribution
-map but are left out of every rate.</p>
+to N. Where both nets of a bongo pair or double neuston frame were
+sorted, only the primary net is used, as the documentation advises.
+Larvae from other gears, meshes, tows and second nets stay on the
+distribution map but are left out of every rate.</p>
 <pre class="r"><code>GEAR &lt;- c(&quot;01&quot; = &quot;Bongo&quot;, &quot;17&quot; = &quot;Bongo&quot;, &quot;11&quot; = &quot;Bongo&quot;, &quot;14&quot; = &quot;Bongo&quot;, &quot;05&quot; = &quot;Bongo&quot;,
           &quot;12&quot; = &quot;Bongo&quot;, &quot;13&quot; = &quot;Bongo&quot;, &quot;15&quot; = &quot;Bongo&quot;,
           &quot;03&quot; = &quot;Neuston&quot;, &quot;08&quot; = &quot;Neuston&quot;,
@@ -1806,10 +1808,14 @@ istrwk &lt;- read_seamap(&quot;ISTRWK.csv&quot;) %&gt;%
             its_code = ITS_CODE,
             # Standard tows: bongo with 0.333-mm mesh towed obliquely, neuston with 0.947-mm mesh at the surface
             standard = (GEAR_ICD %in% c(&quot;01&quot;, &quot;17&quot;) &amp; MESH_ICD == &quot;03&quot; &amp; TOW_PATTERN %in% &quot;01&quot;) |
-                       (GEAR_ICD %in% c(&quot;03&quot;, &quot;08&quot;) &amp; MESH_ICD == &quot;09&quot; &amp; TOW_PATTERN %in% &quot;02&quot;)) %&gt;%
-  mutate(gear = if_else(gear %in% c(&quot;Bongo&quot;, &quot;Neuston&quot;) &amp; !standard,
-                        paste(gear, &quot;(non-standard)&quot;), gear)) %&gt;%
-  select(-standard)
+                       (GEAR_ICD %in% c(&quot;03&quot;, &quot;08&quot;) &amp; MESH_ICD == &quot;09&quot; &amp; TOW_PATTERN %in% &quot;02&quot;),
+            # Second net of a pair where both nets were sorted. SEAMAP documentation, Section IV:
+            # &quot;If SORT_PAIR = 1 and SORT_PAIR_PRIMARY = &#39;S&#39; then delete&quot; (SP_PRISEC in this table)
+            second_net = as.numeric(SORT_PAIR) %in% 1 &amp; SP_PRISEC %in% &quot;S&quot;) %&gt;%
+  mutate(gear = case_when(gear %in% c(&quot;Bongo&quot;, &quot;Neuston&quot;) &amp; !standard  ~ paste(gear, &quot;(non-standard)&quot;),
+                          gear %in% c(&quot;Bongo&quot;, &quot;Neuston&quot;) &amp; second_net ~ paste(gear, &quot;(second net)&quot;),
+                          TRUE                                         ~ gear)) %&gt;%
+  select(-standard, -second_net)
 count(istrwk, gear, name = &quot;samples&quot;)</code></pre>
 <div class="kable-table">
 <table>
@@ -1822,27 +1828,35 @@ count(istrwk, gear, name = &quot;samples&quot;)</code></pre>
 <tbody>
 <tr class="odd">
 <td align="left">Bongo</td>
-<td align="right">28860</td>
+<td align="right">28655</td>
 </tr>
 <tr class="even">
 <td align="left">Bongo (non-standard)</td>
 <td align="right">2148</td>
 </tr>
 <tr class="odd">
+<td align="left">Bongo (second net)</td>
+<td align="right">205</td>
+</tr>
+<tr class="even">
 <td align="left">MOCNESS</td>
 <td align="right">1862</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td align="left">Methot</td>
 <td align="right">78</td>
 </tr>
-<tr class="odd">
-<td align="left">Neuston</td>
-<td align="right">19217</td>
-</tr>
 <tr class="even">
+<td align="left">Neuston</td>
+<td align="right">18476</td>
+</tr>
+<tr class="odd">
 <td align="left">Neuston (non-standard)</td>
 <td align="right">1137</td>
+</tr>
+<tr class="even">
+<td align="left">Neuston (second net)</td>
+<td align="right">741</td>
 </tr>
 <tr class="odd">
 <td align="left">Ring</td>
@@ -1987,7 +2001,7 @@ are multiplied by the inverse of the aliquot.</p>
 
 catch &lt;- read_seamap(&quot;ISARWK.csv&quot;) %&gt;%
   filter(str_detect(toupper(TAXON), &quot;^RACHYCENTR&quot;)) %&gt;%
-  transmute(v_c_p = substr(V_C_P_S, 1, 10), v_c_p_s = V_C_P_S, v_c_p_s_cat = V_C_P_S_CAT,
+  transmute(v_c_p_s = V_C_P_S, v_c_p_s_cat = V_C_P_S_CAT,   # the station key comes from the sample table below
             taxon = TAXON, aliquot = ALIQUOT, sort_isa = SORT_ISA,
             n_sorted = coalesce(as.numeric(MEAS), 0) + coalesce(as.numeric(NOT_MEAS), 0),
             n_total  = n_sorted * coalesce(ALIQ_MULT[ALIQUOT], 1))
@@ -2079,7 +2093,7 @@ the map.</p>
 
 records &lt;- catch %&gt;%
   left_join(by_rec, by = &quot;v_c_p_s_cat&quot;) %&gt;%
-  left_join(istrwk %&gt;% select(v_c_p_s, gear, sort_ist, vol_filt_m3), by = &quot;v_c_p_s&quot;) %&gt;%
+  left_join(istrwk %&gt;% select(v_c_p_s, v_c_p, gear, sort_ist, vol_filt_m3), by = &quot;v_c_p_s&quot;) %&gt;%
   inner_join(starec, by = &quot;v_c_p&quot;) %&gt;%
   mutate(year  = year(date),
          month = month(date),
