@@ -122,10 +122,11 @@ sprintf("off-gear or unsorted, kept on the map but out of every rate: %d records
 # Surveys
 
 Each cruise carries a SEAMAP time-series code, `ITS_CODE`. The first two letters name the agency and
-the last two the survey series, grouped here into the surveys named in the Methods. The code-level
-table shows the months and years behind each assignment.
+the last two the survey series. Codes are grouped into the surveys named in the Methods by these
+letters and by the months each code sampled. The six fall plankton codes are the ones listed for
+that survey in Section IV of the SEAMAP documentation.
 
-```{r table1-surveys}
+```{r surveys}
 SURVEY_OF <- c(
   "US-FP" = "Fall plankton", "AL-FP" = "Fall plankton", "FL-FP" = "Fall plankton",
   "LA-FP" = "Fall plankton", "LA-LF" = "Fall plankton", "MS-FP" = "Fall plankton",
@@ -142,37 +143,7 @@ SURVEY_LEVELS <- c("Fall plankton", "Spring plankton", "Summer trawl", "Fall tra
 
 effort <- effort %>%
   mutate(survey = factor(coalesce(SURVEY_OF[its_code], "Other"), levels = SURVEY_LEVELS))
-
-# Month span: the months holding at least 1% of a survey's deployments, so a stray tow does not
-# stretch the range. Winter runs across the new year.
-month_span <- function(m) {
-  keep <- as.integer(names(which(prop.table(table(m)) >= 0.01)))
-  if (all(c(1, 12) %in% keep) && !all(1:12 %in% keep)) {
-    gap <- setdiff(1:12, keep)
-    paste0(month.abb[max(gap) %% 12 + 1], "–", month.abb[min(gap) - 1])
-  } else paste0(month.abb[min(keep)], "–", month.abb[max(keep)])
-}
-
-table1 <- effort %>%
-  group_by(survey) %>%
-  summarise(months = month_span(month), years = paste0(min(year), "–", max(year)),
-            deployments = n(),
-            pct_shelf = round(100 * mean(sta_depth_m > 0 & sta_depth_m <= SHELF_M, na.rm = TRUE)),
-            pct_west_88 = round(100 * mean(lon < -88)), .groups = "drop") %>%
-  mutate(pct = round(100 * deployments / sum(deployments), 1),
-         `Standard deployments (%)` = sprintf("%s (%.1f)", format(deployments, big.mark = ","), pct))
-write_csv(table1, file.path(dir_derived, "table1_surveys.csv"))
-table1
-
-# Florida-shelf years of the summer trawl series (east of 88 W)
-effort %>% filter(survey == "Summer trawl", lon >= -88) %>% count(year, name = "deployments")
-
-# Code-level detail behind each row
-effort %>%
-  group_by(survey, its_code) %>%
-  summarise(deployments = n(), months = month_span(month),
-            years = paste0(min(year), "–", max(year)), .groups = "drop") %>%
-  arrange(survey, desc(deployments))
+count(effort, survey, name = "deployments")
 ```
 
 # Distribution
@@ -184,57 +155,19 @@ count(gulf, size_class)
 gulf %>% slice_max(n_total, n = 3) %>% select(date, lat, lon, gear, n_total, n_meas)
 ```
 
-Symbol sizes are binned because one tow (232 larvae, 8 June 2012) would otherwise dwarf the rest.
+Figure 1 shows every record over the cumulative surface oiling of the Deepwater Horizon spill (days
+of oiling from synthetic aperture radar, NOAA ERMA layer `All_SARDays_020515`), reduced to about
+2 km by the cell maximum. The reduced raster is in `data/derived`. Symbol sizes are binned because
+one tow (232 larvae, 8 June 2012) would otherwise dwarf the rest.
 
-```{r main_distribution, fig.width = 9, fig.height = 5.6}
+```{r fig1_distribution, fig.width = 9, fig.height = 5.6}
 # Sorted bongo or neuston deployments at stations where no gear caught cobia.
 no_cobia <- effort %>% filter(!v_c_p %in% records$v_c_p) %>%
   filter(lon >= BOX$lon[1], lon <= BOX$lon[2], lat >= BOX$lat[1], lat <= BOX$lat[2]) %>%
   distinct(lon = round(lon, 1), lat = round(lat, 1))   # one dot per ~10 km, so repeat visits do not smudge
 sprintf("stations with no cobia: %d deployments, %d distinct positions",
         sum(!effort$v_c_p %in% records$v_c_p), nrow(no_cobia))
-p_dist <- ggplot() +
-  geom_raster(data = bathy, aes(lon, lat, fill = z), interpolate = TRUE) +
-  scale_fill_gradient(low = "#6A93BF", high = "#EEF4FA", name = "Depth (m)",
-                      labels = function(x) -x, breaks = c(0, -3000, -6000),
-                      guide = guide_colourbar(order = 3, barwidth = unit(80, "pt"),
-                                              barheight = unit(6, "pt"))) +
-  geom_sf(data = filter(iso, depth_m == 200), colour = "grey20", linewidth = 0.35) +
-  geom_sf(data = filter(iso, depth_m > 200), colour = "grey35", linewidth = 0.2,
-          linetype = "dotted") +
-  geom_sf(data = land, fill = "grey85", colour = "grey40", linewidth = 0.2) +
-  geom_point(data = DWH, aes(lon, lat), shape = 8, size = 2.6, stroke = 0.9) +
-  annotate("text", x = DWH$lon + 0.3, y = DWH$lat - 0.45, label = "DWH", size = FONT_PT / .pt, family = SANS,
-           fontface = FONT_FACE, hjust = 0) +
-  # stations searched with no cobia, as background for where larvae were absent
-  # the raster used the fill scale, so start a new one for the points
-  ggnewscale::new_scale_fill() +
-  geom_point(data = no_cobia, aes(lon, lat, fill = "No cobia"), size = 0.35, alpha = 0.6,
-             shape = 21, stroke = 0, show.legend = TRUE) +
-  # smallest drawn last so they are not buried under the commoner medium tows
-  geom_point(data = gulf %>% filter(!is.na(size_class)) %>%
-               arrange(desc(as.integer(size_class)), desc(n_total)),
-             aes(lon, lat, size = n_total, fill = size_class), shape = 21, colour = "grey15",
-             stroke = 0.3, alpha = 0.75) +
-  scale_fill_manual(values = c(SIZE_COLS, "No cobia" = "grey30"), name = "Most of the tow",
-                    breaks = c(SIZE_LEVELS, "No cobia"), drop = FALSE) +
-  scale_size_binned(breaks = c(1, 5, 20, 100), range = c(1.2, 6.5), name = "Larvae per tow",
-                    nice.breaks = FALSE) +
-  guides(fill = guide_legend(order = 1, override.aes = list(size = c(3.6, 3.6, 3.6, 1), alpha = 1,
-                                                            colour = c(rep("grey15", 3), NA))),
-         size = guide_bins(order = 2, override.aes = list(shape = 21, fill = "grey70",
-                                                          colour = "grey15", stroke = 0.3))) +
-  map_frame +
-  theme(panel.background = element_rect(fill = "#EEF4FA"), legend.box = "horizontal",
-        legend.box.just = "top", legend.spacing.x = unit(10, "pt"))
-p_dist
-```
 
-Figure 1 of the paper adds the cumulative surface oiling of the Deepwater Horizon spill (days of
-oiling from synthetic aperture radar, NOAA ERMA layer `All_SARDays_020515`), reduced to about 2 km
-by the cell maximum. The reduced raster is in `data/derived`.
-
-```{r supp_oiling, fig.width = 9, fig.height = 5.6}
 oil_file <- file.path(dir_derived, "dwh_days_oiling_2km.tif")
 if (!file.exists(oil_file)) {
   oil_raw <- rast("data/raw/dwh_oiling/All_SARDays_020515/AllSAR_0205.tif")
@@ -325,7 +258,7 @@ tx %>% filter(month %in% c(5:9)) %>% select(month, tows, larvae, rate)
 
 Each bar is split by the size composition of the larvae measured in that month.
 
-```{r main_season, fig.width = 5, fig.height = 3.2}
+```{r fig2_season, fig.width = 5, fig.height = 3.2}
 mix <- lengths %>% inner_join(select(recs, v_c_p_s_cat, month), by = "v_c_p_s_cat") %>%
   count(month, size, name = "n_meas") %>%
   group_by(month) %>% mutate(share = n_meas / sum(n_meas)) %>% ungroup()
@@ -361,7 +294,7 @@ sprintf("cells with >=10 June-July tows: %d; of those with no cobia: %d",
         sum(cells$searched), sum(cells$searched & cells$n_larvae == 0))
 ```
 
-```{r main_shelf_maps, fig.width = 9, fig.height = 4.4}
+```{r fig3_june_july_maps, fig.width = 9, fig.height = 4.4}
 frame <- list(geom_sf(data = filter(iso, depth_m == 200), colour = "grey35", linewidth = 0.3),
               geom_sf(data = land, fill = "grey85", colour = "grey40", linewidth = 0.2),
               map_frame, theme(panel.background = element_rect(fill = "white")),
@@ -412,18 +345,6 @@ peak_eff %>% filter(!is.na(region), year %in% SERIES) %>%
             pct_bongo = round(100 * mean(gear == "Bongo")), .groups = "drop")
 ```
 
-```{r main_shelf_bar, fig.width = 4, fig.height = 3.4}
-p_bar <- ggplot(reg, aes(reorder(str_remove(region, " shelf"), -rate), rate)) +
-  geom_col(fill = "#0072B2", colour = "grey20", linewidth = 0.2, width = 0.6) +
-  geom_errorbar(aes(ymin = lo, ymax = hi), width = 0.15, linewidth = 0.4) +
-  geom_text(aes(y = hi, label = sprintf("%d tows\n%.0f larvae", tows, larvae)),
-            vjust = -0.3, size = FONT_PT / .pt, family = SANS, fontface = FONT_FACE,
-            lineheight = 0.95) +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.28))) +
-  labs(x = NULL, y = "Larvae per 100 shelf tows,\nJune-July 1982-2016")
-p_bar
-```
-
 # Size
 
 ```{r size-tables}
@@ -438,7 +359,7 @@ by_depth %>% filter(month %in% 4:10) %>% count(month, size) %>%
   select(-n) %>% pivot_wider(names_from = size, values_from = pct)
 ```
 
-```{r main_size_depth, fig.width = 5, fig.height = 3.4}
+```{r fig4_size_depth, fig.width = 5, fig.height = 3.4}
 p_size <- ggplot(by_depth, aes(sta_depth_m, length_mm, fill = size)) +
   geom_point(shape = 21, colour = "grey20", stroke = 0.2, alpha = 0.6, size = 1.5) +
   scale_fill_manual(values = SIZE_COLS, guide = "none") +
@@ -450,7 +371,7 @@ p_size
 
 The share of small larvae caught on the shelf, across several size cut-offs.
 
-```{r explore_size_cutoff}
+```{r size-cutoff}
 map_dfr(c(3, 3.2, 3.5, 4, 4.5, 5), function(cut) {
   keep <- lengths %>% group_by(v_c_p_s_cat) %>%
     summarise(hit = any(length_mm <= cut), .groups = "drop") %>% filter(hit)
@@ -482,7 +403,7 @@ diel
 
 The bongo values for large larvae are based on four larvae.
 
-```{r explore_diel, fig.width = 6, fig.height = 3.2}
+```{r fig5_day_night, fig.width = 6, fig.height = 3.2}
 p_diel <- diel %>% pivot_longer(c(day, night), names_to = "tod", values_to = "per_100") %>%
   ggplot(aes(size, per_100, fill = tod)) +
   geom_col(position = "dodge", colour = "grey20", linewidth = 0.2, width = 0.7) +
@@ -529,7 +450,7 @@ bind_rows(
             pct_25_30 = round(100 * mean(t >= 25 & t <= 30), 1), .groups = "drop")
 ```
 
-```{r explore_temp, fig.width = 5.5, fig.height = 3.2}
+```{r fig6_temperature, fig.width = 5.5, fig.height = 3.2}
 p_temp <- bind_rows(
   tibble(set = "All sorted tows", t = temp_tows$temp_surf),
   tibble(set = "Larvae",          t = temp_pos$temp_surf)) %>%
@@ -570,7 +491,7 @@ write_csv(sal_region, file.path(dir_derived, "salinity_by_region.csv"))
 sal_region
 ```
 
-```{r explore_sal, fig.width = 5.5, fig.height = 3.2}
+```{r fig6_salinity, fig.width = 5.5, fig.height = 3.2}
 p_sal <- bind_rows(
   tibble(set = "All sorted tows", s = sal_tows$sal_surf),
   tibble(set = "Larvae",          s = sal_pos$sal_surf)) %>%
@@ -582,21 +503,11 @@ p_sal <- bind_rows(
 p_sal
 ```
 
-# Results figure
-
-```{r main_results, fig.width = 9.5, fig.height = 11.5}
-(p_dist) / (p_eff | p_rate) / (p_season | p_bar | p_size) +
-  plot_layout(heights = c(1.9, 1.5, 1.05)) +
-  plot_annotation(tag_levels = "A") &
-  theme(plot.tag = element_text(size = TAG_PT, face = "bold", family = SERIF))
-```
-
 # Figures for submission
 
 Each figure is saved as its own file, in PDF and as a 600 dpi TIFF, as the journal requires. Widths
 match the printed page (7 in for full width, 3.5 in for one column) so that labels print at the
-size set above. Seven figures are exported. The paper uses six of them: `fig4_shelf_rates` repeats
-the shelf table and is left out, so `fig5` to `fig7` are Figures 4 to 6 in the paper.
+size set above. The six figures are numbered as in the paper.
 
 ```{r journal-figures}
 dir_journal <- file.path(dir_fig, "journal")
@@ -616,26 +527,24 @@ save_fig <- function(p, name, w, h) {
 diel_letters <- tibble(gear = c("Bongo", "Neuston"), lab = c("A", "B"))
 
 save_fig(p_oil + theme(plot.margin = margin(2, 20, 2, 2)),
-         "fig1_distribution", 7, 4.6)   # p_oil: records over DWH oiling (p_dist above is the depth-shaded version)
+         "fig1_distribution", 7, 4.6)
 save_fig(p_season, "fig2_season", 5, 2.6)
 save_fig((p_eff + panel_letter("A")) / (p_rate + panel_letter("B")), "fig3_june_july_maps", 7, 7.6)
-save_fig(p_bar, "fig4_shelf_rates", 3.5, 3)                 # repeats Table 2; candidate to drop
-save_fig(p_size, "fig5_size_depth", 3.5, 2.8)
+save_fig(p_size, "fig4_size_depth", 3.5, 2.8)
 save_fig(p_diel + geom_label(data = diel_letters, aes(x = -Inf, y = Inf, label = lab),
                              inherit.aes = FALSE, hjust = -0.25, vjust = 1.25, family = SERIF,
                              fontface = "bold", size = TAG_PT / .pt, fill = "white",
                              label.size = 0) +
            theme(strip.text = element_text(hjust = 0.5)),
-         "fig6_day_night", 7, 3)   # repeats Table 3; candidate to drop
+         "fig5_day_night", 7, 3)
 save_fig((p_temp + panel_letter("A")) / (p_sal + panel_letter("B")) +
            plot_layout(guides = "collect") & theme(legend.position = "bottom"),
-         "fig7_temperature_salinity", 3.5, 5.4)
-list.files(dir_journal)
+         "fig6_temperature_salinity", 3.5, 5.4)
 ```
 
 # Numbers for the text
 
-Numbers quoted in the Results that are not shown above.
+Numbers quoted in the paper that are not shown above.
 
 ## Catch by gear
 
@@ -653,6 +562,29 @@ all_tows %>% group_by(gear) %>%
 all_tows %>% filter(!is.na(night)) %>%
   group_by(gear, night) %>% summarise(tows = n(), per_100 = round(100 * mean(n), 1), .groups = "drop")
 sprintf("deployments with cobia: %d of %d", sum(all_tows$n > 0), nrow(all_tows))
+
+# Larvae per record, all records in the study area
+gulf %>% summarise(records = n(), median_larvae = median(n_total),
+                   pct_one_or_two = round(100 * mean(n_total <= 2)))
+
+# Larvae left out of every rate, by reason
+gulf %>%
+  mutate(why = if_else(gear %in% c("Bongo", "Neuston"), "in the rates", paste("gear:", gear))) %>%
+  count(why, wt = n_total, name = "larvae")
+```
+
+## Monthly day and night
+
+Shelf rates by month for day and night tows, 1982-2016.
+
+```{r text-season-day-night}
+effort %>% filter(!is.na(night), sta_depth_m > 0, sta_depth_m <= SHELF_M, year %in% SERIES) %>%
+  count(month, night, name = "tows") %>%
+  left_join(rates %>% filter(!is.na(night), sta_depth_m > 0, sta_depth_m <= SHELF_M,
+                             year %in% SERIES) %>%
+              count(month, night, wt = n_total, name = "larvae"), by = c("month", "night")) %>%
+  mutate(larvae = coalesce(larvae, 0), per_100 = round(100 * larvae / tows, 1)) %>%
+  filter(month %in% 5:9)
 ```
 
 ## Survey shares and coverage
@@ -675,6 +607,18 @@ tibble(plankton_surveys_pct_all = round(100 * mean(effort$survey %in% c("Fall pl
 
 # June and July West Florida shelf deployments, 1982-2016, by survey
 effort %>% filter(month %in% PEAK, year %in% SERIES, region == "West Florida shelf") %>% count(survey)
+
+# Years the summer trawl survey reached the West Florida shelf (east of 88 W)
+effort %>% filter(survey == "Summer trawl", lon >= -88) %>% count(year, name = "deployments")
+
+# Share of each shelf's tows in June and July, which is why the shelves are compared in those months
+effort %>% filter(!is.na(region), sta_depth_m <= SHELF_M) %>%
+  group_by(region) %>%
+  summarise(shelf_tows = n(), pct_in_june_july = round(100 * mean(month %in% PEAK)), .groups = "drop")
+
+# June and July shelf tows by year since 2013; none after 2016
+effort %>% filter(month %in% PEAK, sta_depth_m > 0, sta_depth_m <= SHELF_M, year >= 2013) %>%
+  count(year, name = "june_july_shelf_tows")
 
 # November to March shelf deployments, 1982-2016, by survey
 shelf %>% filter(month %in% c(11, 12, 1, 2, 3), year %in% SERIES) %>% count(survey) %>%
@@ -738,207 +682,3 @@ shelf_tows %>% group_by(region) %>%
   mutate(lo = round(map_dbl(ci, 1), 1), hi = round(map_dbl(ci, 2), 1), .keep = "unused")
 ```
 
-# Checks
-
-Each check shows the two values that should agree.
-
-## Extraction
-
-Counts taken directly from `ISARWK` against the counts used above.
-
-```{r check-extraction}
-isarwk <- read_csv("data/raw/seamap/ISARWK.csv", col_types = cols(.default = col_character()),
-                   show_col_types = FALSE, name_repair = "minimal") %>%
-  rename_with(~ str_remove(.x, "^\ufeff"))
-ALIQ_MULT <- c("1/1" = 1, "1/2" = 2, "1/4" = 4, "1/8" = 8)
-
-raw <- isarwk %>% filter(str_detect(toupper(TAXON), "^RACHYCENTR")) %>%
-  mutate(n = (coalesce(as.numeric(MEAS), 0) + coalesce(as.numeric(NOT_MEAS), 0)) *
-             coalesce(ALIQ_MULT[ALIQUOT], 1))
-
-tibble(quantity    = c("records", "larvae after aliquot correction", "sub-sampled records"),
-       from_raw    = c(nrow(raw), sum(raw$n), sum(raw$ALIQUOT != "1/1")),
-       in_pipeline = c(nrow(records), sum(records$n_total), sum(records$aliquot != "1/1"))) %>%
-  mutate(agree = from_raw == in_pipeline)
-```
-
-The taxon match with and without anchoring, which should give the same records.
-
-```{r check-taxon}
-tibble(anchored   = paste(sort(unique(raw$TAXON)), collapse = "; "),
-       unanchored = isarwk %>% filter(str_detect(toupper(TAXON), "RACHYCENTR")) %>%
-                      pull(TAXON) %>% unique() %>% sort() %>% paste(collapse = "; "))
-```
-
-## Station join
-
-Every record has a station, and positions and dates are possible.
-
-```{r check-join}
-tibble(quantity = c("records without a station", "latitude range", "longitude range",
-                    "date range", "duplicated catalogue keys", "records outside the study box"),
-       value = c(as.character(sum(is.na(records$lat))),
-                 sprintf("%.1f to %.1f N", min(records$lat), max(records$lat)),
-                 sprintf("%.1f to %.1f", min(records$lon), max(records$lon)),
-                 sprintf("%s to %s", min(records$date), max(records$date)),
-                 as.character(sum(duplicated(records$v_c_p_s_cat))),
-                 as.character(nrow(records) - nrow(gulf))))
-```
-
-## Effort match
-
-Larvae with no matching effort, which are left out of every rate.
-
-```{r check-excluded}
-gulf %>%
-  mutate(why = case_when(!gear %in% c("Bongo", "Neuston") ~ paste("gear:", gear),
-                         !sort_ist %in% SORTED            ~ "not flagged sorted",
-                         TRUE                             ~ "in the rates")) %>%
-  count(why, wt = n_total, name = "larvae")
-```
-
-Monthly larva counts recalculated from scratch.
-
-```{r check-numerator}
-tibble(source = c("rebuilt here", "used in the monthly rates"),
-       larvae = c(gulf %>% filter(gear %in% c("Bongo", "Neuston"), sort_ist %in% SORTED,
-                                  sta_depth_m > 0, sta_depth_m <= SHELF_M,
-                                  year %in% SERIES) %>% pull(n_total) %>% sum(),
-                  sum(cpue$n_larvae)))
-```
-
-## Lengths
-
-Share of larvae measured, by tow size.
-
-```{r check-lengths}
-tibble(quantity = c("larvae measured", "larvae counted", "coverage",
-                    "tows holding >10 larvae", "of those, under half measured",
-                    "length range", "measured exceeds counted",
-                    "size classes do not sum to measured"),
-       value = c(sum(gulf$n_meas, na.rm = TRUE), sum(gulf$n_total),
-                 sprintf("%.0f%%", 100 * sum(gulf$n_meas, na.rm = TRUE) / sum(gulf$n_total)),
-                 sum(gulf$n_total > 10),
-                 sum(gulf$n_total > 10 & gulf$n_meas / gulf$n_total < 0.5, na.rm = TRUE),
-                 sprintf("%.1f to %.1f mm", min(lengths$length_mm), max(lengths$length_mm)),
-                 sum(gulf$n_meas > gulf$n_total, na.rm = TRUE),
-                 sum(gulf$n_small + gulf$n_mid + gulf$n_big != gulf$n_meas, na.rm = TRUE)) %>%
-         as.character())
-```
-
-## Depth
-
-Recorded station depth against an independent bathymetry.
-
-```{r check-depth}
-chk <- gulf %>% filter(sta_depth_m > 0)
-chk$etopo_m <- -terra::extract(rast(as.xyz(b), type = "xyz", crs = "EPSG:4326"),
-                               as.matrix(chk[, c("lon", "lat")]))[, 1]
-chk <- filter(chk, etopo_m > 0)
-tibble(stations = nrow(chk),
-       correlation_log_depth = round(cor(log10(chk$sta_depth_m), log10(chk$etopo_m)), 3),
-       median_ratio = round(median(chk$sta_depth_m / chk$etopo_m), 2),
-       disagree_over_fourfold = sum(chk$sta_depth_m / chk$etopo_m > 4 |
-                                    chk$sta_depth_m / chk$etopo_m < 0.25))
-```
-
-## Seasonal peak
-
-The June and July peak with the area fixed and with day and night tows separated.
-
-```{r check-season-controls}
-tod <- effort %>% filter(!is.na(night), sta_depth_m > 0, sta_depth_m <= SHELF_M,
-                         year %in% SERIES) %>%
-  count(month, night, name = "tows") %>%
-  left_join(rates %>% filter(!is.na(night), sta_depth_m > 0, sta_depth_m <= SHELF_M,
-                             year %in% SERIES) %>%
-              count(month, night, wt = n_total, name = "larvae"), by = c("month", "night")) %>%
-  mutate(rate = 100 * coalesce(larvae, 0) / tows)
-
-tibble(control = c("all Gulf shelf, pooled", "Texas-Louisiana shelf only",
-                   "day tows only", "night tows only"),
-       june_july = c(max(cpue$per_100[cpue$month %in% PEAK]),
-                     max(tx$rate[tx$month %in% PEAK]),
-                     max(tod$rate[tod$month %in% PEAK & !tod$night]),
-                     max(tod$rate[tod$month %in% PEAK & tod$night])),
-       september = c(cpue$per_100[cpue$month == 9], tx$rate[tx$month == 9],
-                     tod$rate[tod$month == 9 & !tod$night],
-                     tod$rate[tod$month == 9 & tod$night])) %>%
-  mutate(across(june_july:september, ~ round(.x, 1)), ratio = round(june_july / september, 1))
-```
-
-## Shelf difference
-
-Share of each shelf's tows in June and July.
-
-```{r check-shelf-controls}
-effort %>% filter(!is.na(region), sta_depth_m <= SHELF_M) %>%
-  group_by(region) %>%
-  summarise(shelf_tows = n(), pct_in_june_july = round(100 * mean(month %in% PEAK)),
-            .groups = "drop") %>%
-  left_join(effort %>% filter(!is.na(region), month %in% PEAK, year %in% SERIES) %>%
-              group_by(region) %>%
-              summarise(years = n_distinct(year), depth_median = round(median(sta_depth_m)),
-                        pct_bongo = round(100 * mean(gear == "Bongo")), .groups = "drop"),
-            by = "region") %>%
-  left_join(reg %>% select(region, rate, lo, hi) %>%
-              mutate(across(rate:hi, ~ round(.x, 1))), by = "region")
-```
-
-## Interannual trend
-
-Day and night rates across the mid-1990s change in sampling. Both rose, and the mix of surveys
-changed as well, so no trend over years is fitted.
-
-```{r check-trend}
-era %>% select(era, night, tows, larvae, per_100) %>%
-  pivot_wider(names_from = era, values_from = c(tows, larvae, per_100)) %>%
-  mutate(fold_change = round(`per_100_1995-2016` / `per_100_1982-1994`, 1))
-era %>% group_by(era) %>% summarise(pct_night = round(100 * sum(tows[night]) / sum(tows)), tows = sum(tows))
-```
-
-## Surface temperature sentinels
-
-The raw temperature column against the filtered one.
-
-```{r check-temp}
-raw_t <- read_csv(file.path("data/raw/seamap", "STAREC.csv"),
-                  col_types = cols(.default = col_character()),
-                  show_col_types = FALSE, name_repair = "minimal") %>%
-  rename_with(~ str_remove(.x, "^\ufeff")) %>%
-  transmute(t = as.numeric(TEMP_SSURF))
-
-tibble(check = c("stations in STAREC", "temperature recorded", "zero or below 5",
-                 "above 36", "kept"),
-       n = c(nrow(raw_t), sum(!is.na(raw_t$t)), sum(raw_t$t < 5, na.rm = TRUE),
-             sum(raw_t$t > 36, na.rm = TRUE),
-             sum(raw_t$t >= 5 & raw_t$t <= 36, na.rm = TRUE)))
-```
-
-## Series end
-
-Shelf deployments by month after 2016.
-
-```{r check-series-end}
-effort %>% filter(month %in% PEAK, sta_depth_m > 0, sta_depth_m <= SHELF_M) %>%
-  count(year, name = "june_july_shelf_tows") %>%
-  filter(year >= 2013) %>%
-  full_join(tibble(year = 2013:max(gulf$year)), by = "year") %>%
-  arrange(year) %>%
-  mutate(june_july_shelf_tows = coalesce(june_july_shelf_tows, 0L))
-```
-
-## Time zones
-
-Share of tows classed as night by decade, which should not jump when the recorded zone changes.
-
-```{r check-time-zone}
-effort %>% mutate(decade = 10 * (year %/% 10),
-                  zone = recode(as.character(time_zn), "1" = "EST", "2" = "EDT", "3" = "CST", "4" = "CDT",
-                                "5" = "AST", "6" = "ADT", "8" = "GMT", .default = "other")) %>%
-  group_by(decade) %>%
-  summarise(tows = n(), pct_gmt = round(100 * mean(zone == "GMT")),
-            pct_local = round(100 * mean(zone %in% c("EST", "EDT", "CST", "CDT", "AST", "ADT"))),
-            pct_night = round(100 * mean(night, na.rm = TRUE)),
-            no_time = sum(is.na(night)), .groups = "drop")
-```
