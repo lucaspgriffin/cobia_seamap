@@ -7,13 +7,13 @@ Mexico from the SEAMAP ichthyoplankton survey, 1982-2024.
 ## Running it
 
 ```r
-rmarkdown::render("01_data.Rmd",     output_dir = "docs")   # first run downloads ~300 MB
+rmarkdown::render("01_data.Rmd",     output_dir = "docs")
 rmarkdown::render("02_analysis.Rmd", output_dir = "docs")
 ```
 
 | file | |
 |---|---|
-| `01_data.Rmd` | download, stations, environment, effort, catch, lengths into `data/derived/` |
+| `01_data.Rmd` | stations, environment, effort, catch, lengths into `data/derived/` |
 | `02_analysis.Rmd` | distribution, season, the two shelves, size, day and night, temperature and salinity |
 | `docs/*.html` | knitted output |
 
@@ -24,10 +24,12 @@ rmarkdown.
 
 ## Data
 
-SEAMAP Plankton Survey Data (CSV) from https://seamapdata.gsmfc.org/. The download chunk in
-`01_data.Rmd` records the release used in `data/raw/seamap/SOURCE.txt`. The environmental table
-`ENVREC_4DB.csv` from the same release is committed under `data/raw/seamap/` with its
-documentation, so the analysis does not depend on a later re-release.
+Plankton Survey Data (CSV), release of August 13, 2026, from the SEAMAP data download form of
+the Gulf States Marine Fisheries Commission (https://seamapdata.gsmfc.org/pages/download-form.php).
+Choose that package on the form, download it, and unzip its contents into `data/raw/seamap/`
+before running `01_data.Rmd`. The environmental table `ENVREC_4DB.csv` and the two documentation
+files from the same package are committed under `data/raw/seamap/`, so the analysis does not
+depend on a later re-release.
 
 | table | one row per | fields used |
 |---|---|---|

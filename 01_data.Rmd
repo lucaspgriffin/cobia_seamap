@@ -23,22 +23,21 @@ BOX    <- list(lon = c(-98, -80), lat = c(18, 31))   # study area
 FATHOM <- 1.8288                                     # DEPTH_SSTA is recorded in fathoms
 ```
 
-# Download
+# Data
 
-One zip from the Gulf States Marine Fisheries Commission, downloaded only if the tables are missing.
+The tables come from the Plankton Survey Data (CSV) package on the SEAMAP data download form of
+the Gulf States Marine Fisheries Commission (https://seamapdata.gsmfc.org/pages/download-form.php),
+release of August 13, 2026. Choose the package on the form, download it, and unzip its contents
+into `data/raw/seamap/`.
 
-```{r download, eval = !all(file.exists(file.path("data/raw/seamap", c("STAREC.csv", "ISTRWK.csv", "ISARWK.csv", "ILFRWK.csv", "ENVREC_4DB.csv"))))}
-URL  <- "https://seamapdata.gsmfc.org/files/SEAMAPPlanktonCSV.zip"
-zipf <- file.path(dir_raw, "SEAMAPPlanktonCSV.zip")
+```{r data-check}
 want <- c("STAREC.csv", "ISTRWK.csv", "ISARWK.csv", "ILFRWK.csv", "ENVREC_4DB.csv")
-
-if (!file.exists(zipf)) { options(timeout = 3600); download.file(URL, zipf, mode = "wb") }
-inside <- unzip(zipf, list = TRUE)$Name
-for (f in want[!file.exists(file.path(dir_seamap, want))]) {
-  unzip(zipf, files = inside[basename(inside) == f][1], exdir = dir_seamap, junkpaths = TRUE)
+missing <- want[!file.exists(file.path(dir_seamap, want))]   # tables not yet in place
+if (length(missing) > 0) {
+  stop("Missing from data/raw/seamap/: ", paste(missing, collapse = ", "),
+       ". Download the Plankton Survey Data (CSV) package from the SEAMAP data download form ",
+       "and unzip it there.")
 }
-writeLines(c(paste("source:", URL), paste("downloaded:", format(Sys.time()))),
-           file.path(dir_seamap, "SOURCE.txt"))
 ```
 
 Tables are linked by `V_C_P` (vessel, cruise, station), `V_C_P_S` (adds the sample), and

@@ -1513,21 +1513,20 @@ for (p in c(dir_seamap, dir_derived)) dir.create(p, recursive = TRUE, showWarnin
 
 BOX    &lt;- list(lon = c(-98, -80), lat = c(18, 31))   # study area
 FATHOM &lt;- 1.8288                                     # DEPTH_SSTA is recorded in fathoms</code></pre>
-<div id="download" class="section level1">
-<h1>Download</h1>
-<p>One zip from the Gulf States Marine Fisheries Commission, downloaded
-only if the tables are missing.</p>
-<pre class="r"><code>URL  &lt;- &quot;https://seamapdata.gsmfc.org/files/SEAMAPPlanktonCSV.zip&quot;
-zipf &lt;- file.path(dir_raw, &quot;SEAMAPPlanktonCSV.zip&quot;)
-want &lt;- c(&quot;STAREC.csv&quot;, &quot;ISTRWK.csv&quot;, &quot;ISARWK.csv&quot;, &quot;ILFRWK.csv&quot;, &quot;ENVREC_4DB.csv&quot;)
-
-if (!file.exists(zipf)) { options(timeout = 3600); download.file(URL, zipf, mode = &quot;wb&quot;) }
-inside &lt;- unzip(zipf, list = TRUE)$Name
-for (f in want[!file.exists(file.path(dir_seamap, want))]) {
-  unzip(zipf, files = inside[basename(inside) == f][1], exdir = dir_seamap, junkpaths = TRUE)
-}
-writeLines(c(paste(&quot;source:&quot;, URL), paste(&quot;downloaded:&quot;, format(Sys.time()))),
-           file.path(dir_seamap, &quot;SOURCE.txt&quot;))</code></pre>
+<div id="data" class="section level1">
+<h1>Data</h1>
+<p>The tables come from the Plankton Survey Data (CSV) package on the
+SEAMAP data download form of the Gulf States Marine Fisheries Commission
+(<a href="https://seamapdata.gsmfc.org/pages/download-form.php" class="uri">https://seamapdata.gsmfc.org/pages/download-form.php</a>),
+release of August 13, 2026. Choose the package on the form, download it,
+and unzip its contents into <code>data/raw/seamap/</code>.</p>
+<pre class="r"><code>want &lt;- c(&quot;STAREC.csv&quot;, &quot;ISTRWK.csv&quot;, &quot;ISARWK.csv&quot;, &quot;ILFRWK.csv&quot;, &quot;ENVREC_4DB.csv&quot;)
+missing &lt;- want[!file.exists(file.path(dir_seamap, want))]   # tables not yet in place
+if (length(missing) &gt; 0) {
+  stop(&quot;Missing from data/raw/seamap/: &quot;, paste(missing, collapse = &quot;, &quot;),
+       &quot;. Download the Plankton Survey Data (CSV) package from the SEAMAP data download form &quot;,
+       &quot;and unzip it there.&quot;)
+}</code></pre>
 <p>Tables are linked by <code>V_C_P</code> (vessel, cruise, station),
 <code>V_C_P_S</code> (adds the sample), and <code>V_C_P_S_CAT</code>
 (adds the catalog number).</p>
