@@ -8,8 +8,8 @@ output:
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, comment = "")
 ```
 
-Builds the three tables used in `02_analysis.Rmd` from the SEAMAP plankton archive: sampling effort,
-cobia catch records, and larval lengths.
+Builds the sampling effort, cobia catch records and larval lengths used in `02_analysis.Rmd` from the
+SEAMAP plankton archive.
 
 ```{r packages}
 library(tidyverse); library(suncalc)
@@ -47,7 +47,7 @@ Tables are linked by `V_C_P` (vessel, cruise, station), `V_C_P_S` (adds the samp
 | `STAREC` | station | date, time, position, depth, gears deployed |
 | `ENVREC_4DB` | station | surface salinity, dissolved oxygen, turbidity |
 | `ISTRWK` | plankton sample | gear code, mesh, volume filtered, sorted flag, survey (`ITS_CODE`) |
-| `ISARWK` | taxon within a sample | counts, aliquot |
+| `ISARWK` | catalog number within a sample | counts, aliquot |
 | `ILFRWK` | measured larva | length |
 
 Every column is read as text.
@@ -125,7 +125,7 @@ envrec <- read_seamap("ENVREC_4DB.csv") %>%
          turb_surf = if_else(turb_surf >= TURB_OK[1] & turb_surf <= TURB_OK[2], turb_surf, NA_real_)) %>%
   distinct(v_c_p, .keep_all = TRUE)
 
-# Attach the readings to the station table, so effort and catch records inherit them below.
+# Attach the readings to the station table, so effort and catch records include them.
 starec <- starec %>% left_join(envrec, by = "v_c_p")
 
 starec %>%
@@ -138,11 +138,11 @@ count(envrec, env_source, name = "stations")
 
 # Effort
 
-Effort is the standard SEAMAP tows defined in Section IV of the SEAMAP database documentation: the
-61- or 60-cm bongo with 0.333-mm mesh (gear 01 or 17, mesh 03) towed obliquely (tow pattern 01), and
+Effort is the standard SEAMAP tows defined in Section IV of the SEAMAP database documentation. These
+are the 61- or 60-cm bongo with 0.333-mm mesh (gear 01 or 17, mesh 03) towed obliquely (tow pattern 01) and
 the single or double neuston net with 0.947-mm mesh (gear 03 or 08, mesh 09) towed at the surface
 (tow pattern 02), with a sorted status of 1, 2 or D to N. Where both nets of a bongo pair or double
-neuston frame were sorted, only the primary net is used, as the documentation advises. Larvae from
+neuston frame were sorted, only the primary net is used. Larvae from
 other gears, meshes, tows and second nets stay on the distribution map but are left out of every rate.
 
 ```{r effort}
@@ -211,7 +211,7 @@ ALIQ_MULT <- c("1/1" = 1, "1/2" = 2, "1/4" = 4, "1/8" = 8)
 
 catch <- read_seamap("ISARWK.csv") %>%
   filter(str_detect(toupper(TAXON), "^RACHYCENTR")) %>%
-  transmute(v_c_p_s = V_C_P_S, v_c_p_s_cat = V_C_P_S_CAT,   # the station key comes from the sample table below
+  transmute(v_c_p_s = V_C_P_S, v_c_p_s_cat = V_C_P_S_CAT,   # station key is added from the sample table when records are built
             taxon = TAXON, aliquot = ALIQUOT, sort_isa = SORT_ISA,
             n_sorted = coalesce(as.numeric(MEAS), 0) + coalesce(as.numeric(NOT_MEAS), 0),
             n_total  = n_sorted * coalesce(ALIQ_MULT[ALIQUOT], 1))
@@ -240,8 +240,8 @@ round(quantile(lengths$length_mm, c(0, 1/3, 0.5, 2/3, 1)), 1)
 count(lengths, size)
 ```
 
-Each larva is classed by its own length. A record carries the class that most of its measured larvae
-fall in, for one color per symbol on the map.
+Each larva is classed by its own length. Each record is given the class of most of its measured larvae,
+so each map symbol has one color.
 
 ```{r records}
 by_rec <- lengths %>%

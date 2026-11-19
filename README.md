@@ -17,10 +17,11 @@ rmarkdown::render("02_analysis.Rmd", output_dir = "docs")
 | `02_analysis.Rmd` | distribution, season, the two shelves, size, day and night, temperature and salinity |
 | `docs/*.html` | knitted output |
 
-Figures land in `output/figures/`, with the journal versions in `output/figures/journal/`.
+Figures are written to `output/figures/`, with the journal versions in `output/figures/journal/`.
 
-Packages: tidyverse, sf, terra, marmap, patchwork, rnaturalearth, ggspatial, ragg, suncalc,
-rmarkdown.
+The notebooks use tidyverse, sf, terra, marmap, patchwork, rnaturalearth, ggspatial, ragg, suncalc
+and rmarkdown. On a fresh copy, `02_analysis.Rmd` also downloads ETOPO 2022 bathymetry from NOAA
+for the maps.
 
 ## Data
 
@@ -36,10 +37,11 @@ depend on a later re-release.
 | `STAREC` | station | date, time, position, depth, surface temperature |
 | `ENVREC_4DB` | station | surface salinity, dissolved oxygen, turbidity |
 | `ISTRWK` | plankton sample | gear code, mesh, sorted flag, survey code |
-| `ISARWK` | taxon within a sample | counts, aliquot |
+| `ISARWK` | catalog number within a sample | counts, aliquot |
 | `ILFRWK` | measured larva | length |
 
-Keys: `V_C_P` (vessel, cruise, station), `V_C_P_S` (+ sample), `V_C_P_S_CAT` (+ catalogue).
+Tables are linked by `V_C_P` (vessel, cruise, station), `V_C_P_S` (adds the sample) and
+`V_C_P_S_CAT` (adds the catalog number).
 
 Figure 1 also uses the Deepwater Horizon cumulative surface oiling layer (Cumulative TCNNA SAR
 Oiling, Days of Oiling, NRDA cumulative oiling workgroup) from NOAA ERMA. The 2 km reduction

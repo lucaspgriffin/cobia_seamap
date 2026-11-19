@@ -32,7 +32,7 @@ DWH     <- tibble(lon = -88.3660, lat = 28.7366)      # Deepwater Horizon wellhe
 
 SIZE_LEVELS <- c("Small (<5 mm)", "Medium (5-15 mm)", "Large (>15 mm)")
 # Size classes are ordered, so they run light to dark along viridis.
-# Points carry a thin dark outline so the pale yellow end stays visible on light backgrounds.
+# Points have a thin dark outline so the pale yellow points show on light backgrounds.
 SIZE_COLS   <- c("Small (<5 mm)" = "#FDE725", "Medium (5-15 mm)" = "#21908C",
                  "Large (>15 mm)" = "#3B0F70")
 
@@ -81,7 +81,7 @@ gulf <- records %>%
 rates <- gulf %>% filter(gear %in% c("Bongo", "Neuston"), sort_ist %in% SORTED)
 ```
 
-Bathymetry, isobaths and coastline, used by the three maps.
+Bathymetry, isobaths and coastline for the maps.
 
 ```{r basemap}
 b <- getNOAA.bathy(BOX$lon[1], BOX$lon[2], BOX$lat[1], BOX$lat[2], resolution = 1, keep = TRUE,
@@ -121,7 +121,7 @@ sprintf("off-gear or unsorted, kept on the map but out of every rate: %d records
 
 # Surveys
 
-Each cruise carries a SEAMAP time-series code, `ITS_CODE`. The first two letters name the agency and
+Each cruise has a SEAMAP time-series code, `ITS_CODE`. The first two letters name the agency and
 the last two the survey series. Codes are grouped into the surveys named in the Methods by these
 letters and by the months each code sampled. The six fall plankton codes are the ones listed for
 that survey in Section IV of the SEAMAP documentation.
@@ -158,13 +158,13 @@ gulf %>% slice_max(n_total, n = 3) %>% select(date, lat, lon, gear, n_total, n_m
 Figure 1 shows every record over the cumulative surface oiling of the Deepwater Horizon spill (days
 of oiling from synthetic aperture radar, NOAA ERMA layer `All_SARDays_020515`), reduced to about
 2 km by the cell maximum. The reduced raster is in `data/derived`. Symbol sizes are binned because
-one tow (232 larvae, 8 June 2012) would otherwise dwarf the rest.
+one tow held 232 larvae (8 June 2012), far more than any other.
 
 ```{r fig1_distribution, fig.width = 9, fig.height = 5.6}
 # Sorted bongo or neuston deployments at stations where no gear caught cobia.
 no_cobia <- effort %>% filter(!v_c_p %in% records$v_c_p) %>%
   filter(lon >= BOX$lon[1], lon <= BOX$lon[2], lat >= BOX$lat[1], lat <= BOX$lat[2]) %>%
-  distinct(lon = round(lon, 1), lat = round(lat, 1))   # one dot per ~10 km, so repeat visits do not smudge
+  distinct(lon = round(lon, 1), lat = round(lat, 1))   # one dot per ~10 km cell, so repeat visits plot once
 sprintf("stations with no cobia: %d deployments, %d distinct positions",
         sum(!effort$v_c_p %in% records$v_c_p), nrow(no_cobia))
 
@@ -179,7 +179,7 @@ if (!file.exists(oil_file)) {
 oil <- as.data.frame(rast(oil_file), xy = TRUE) %>% set_names(c("lon", "lat", "days"))
 # Cell maxima overstate the oiled area, so no area is quoted from this layer.
 
-# Depth stays as the blue fill; oil is drawn over it as a dark wash whose opacity rises with days.
+# Depth is the blue fill. Oil is drawn over it in gray, darker with more days of oiling.
 p_oil <- ggplot() +
   geom_raster(data = bathy, aes(lon, lat, fill = z), interpolate = TRUE) +
   scale_fill_gradient(low = "#6A93BF", high = "#EEF4FA", name = "Depth (m)",
@@ -503,11 +503,7 @@ p_sal <- bind_rows(
 p_sal
 ```
 
-# Figures for submission
-
-Each figure is saved as its own file, in PDF and as a 600 dpi TIFF, as the journal requires. Widths
-match the printed page (7 in for full width, 3.5 in for one column) so that labels print at the
-size set above. The six figures are numbered as in the paper.
+# Journal figures
 
 ```{r journal-figures}
 dir_journal <- file.path(dir_fig, "journal")
@@ -543,8 +539,6 @@ save_fig((p_temp + panel_letter("A")) / (p_sal + panel_letter("B")) +
 ```
 
 # Numbers for the text
-
-Numbers quoted in the paper that are not shown above.
 
 ## Catch by gear
 
@@ -588,8 +582,6 @@ effort %>% filter(!is.na(night), sta_depth_m > 0, sta_depth_m <= SHELF_M, year %
 ```
 
 ## Survey shares and coverage
-
-Shares quoted in the Methods and Results.
 
 ```{r survey-shares}
 # Larvae by station depth, all records in the study area

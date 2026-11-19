@@ -1501,9 +1501,9 @@ data</h1>
 </div>
 
 
-<p>Builds the three tables used in <code>02_analysis.Rmd</code> from the
-SEAMAP plankton archive: sampling effort, cobia catch records, and
-larval lengths.</p>
+<p>Builds the sampling effort, cobia catch records and larval lengths
+used in <code>02_analysis.Rmd</code> from the SEAMAP plankton
+archive.</p>
 <pre class="r"><code>library(tidyverse); library(suncalc)
 
 dir_raw     &lt;- &quot;data/raw&quot;
@@ -1561,7 +1561,7 @@ and unzip its contents into <code>data/raw/seamap/</code>.</p>
 </tr>
 <tr class="even">
 <td><code>ISARWK</code></td>
-<td>taxon within a sample</td>
+<td>catalog number within a sample</td>
 <td>counts, aliquot</td>
 </tr>
 <tr class="odd">
@@ -1724,7 +1724,7 @@ envrec &lt;- read_seamap(&quot;ENVREC_4DB.csv&quot;) %&gt;%
          turb_surf = if_else(turb_surf &gt;= TURB_OK[1] &amp; turb_surf &lt;= TURB_OK[2], turb_surf, NA_real_)) %&gt;%
   distinct(v_c_p, .keep_all = TRUE)
 
-# Attach the readings to the station table, so effort and catch records inherit them below.
+# Attach the readings to the station table, so effort and catch records include them.
 starec &lt;- starec %&gt;% left_join(envrec, by = &quot;v_c_p&quot;)
 
 starec %&gt;%
@@ -1785,14 +1785,14 @@ starec %&gt;%
 <div id="effort" class="section level1">
 <h1>Effort</h1>
 <p>Effort is the standard SEAMAP tows defined in Section IV of the
-SEAMAP database documentation: the 61- or 60-cm bongo with 0.333-mm mesh
-(gear 01 or 17, mesh 03) towed obliquely (tow pattern 01), and the
-single or double neuston net with 0.947-mm mesh (gear 03 or 08, mesh 09)
-towed at the surface (tow pattern 02), with a sorted status of 1, 2 or D
-to N. Where both nets of a bongo pair or double neuston frame were
-sorted, only the primary net is used, as the documentation advises.
-Larvae from other gears, meshes, tows and second nets stay on the
-distribution map but are left out of every rate.</p>
+SEAMAP database documentation. These are the 61- or 60-cm bongo with
+0.333-mm mesh (gear 01 or 17, mesh 03) towed obliquely (tow pattern 01)
+and the single or double neuston net with 0.947-mm mesh (gear 03 or 08,
+mesh 09) towed at the surface (tow pattern 02), with a sorted status of
+1, 2 or D to N. Where both nets of a bongo pair or double neuston frame
+were sorted, only the primary net is used. Larvae from other gears,
+meshes, tows and second nets stay on the distribution map but are left
+out of every rate.</p>
 <pre class="r"><code>GEAR &lt;- c(&quot;01&quot; = &quot;Bongo&quot;, &quot;17&quot; = &quot;Bongo&quot;, &quot;11&quot; = &quot;Bongo&quot;, &quot;14&quot; = &quot;Bongo&quot;, &quot;05&quot; = &quot;Bongo&quot;,
           &quot;12&quot; = &quot;Bongo&quot;, &quot;13&quot; = &quot;Bongo&quot;, &quot;15&quot; = &quot;Bongo&quot;,
           &quot;03&quot; = &quot;Neuston&quot;, &quot;08&quot; = &quot;Neuston&quot;,
@@ -2001,7 +2001,7 @@ are multiplied by the inverse of the aliquot.</p>
 
 catch &lt;- read_seamap(&quot;ISARWK.csv&quot;) %&gt;%
   filter(str_detect(toupper(TAXON), &quot;^RACHYCENTR&quot;)) %&gt;%
-  transmute(v_c_p_s = V_C_P_S, v_c_p_s_cat = V_C_P_S_CAT,   # the station key comes from the sample table below
+  transmute(v_c_p_s = V_C_P_S, v_c_p_s_cat = V_C_P_S_CAT,   # station key is added from the sample table when records are built
             taxon = TAXON, aliquot = ALIQUOT, sort_isa = SORT_ISA,
             n_sorted = coalesce(as.numeric(MEAS), 0) + coalesce(as.numeric(NOT_MEAS), 0),
             n_total  = n_sorted * coalesce(ALIQ_MULT[ALIQUOT], 1))
@@ -2077,9 +2077,9 @@ round(quantile(lengths$length_mm, c(0, 1/3, 0.5, 2/3, 1)), 1)</code></pre>
 </tbody>
 </table>
 </div>
-<p>Each larva is classed by its own length. A record carries the class
-that most of its measured larvae fall in, for one color per symbol on
-the map.</p>
+<p>Each larva is classed by its own length. Each record is given the
+class of most of its measured larvae, so each map symbol has one
+color.</p>
 <pre class="r"><code>by_rec &lt;- lengths %&gt;%
   group_by(v_c_p_s_cat) %&gt;%
   summarise(n_meas = n(), len_med = median(length_mm), len_min = min(length_mm),
