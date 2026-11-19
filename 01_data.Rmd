@@ -17,7 +17,6 @@ library(tidyverse); library(suncalc)
 dir_raw     <- "data/raw"
 dir_seamap  <- file.path(dir_raw, "seamap")
 dir_derived <- "data/derived"
-for (p in c(dir_seamap, dir_derived)) dir.create(p, recursive = TRUE, showWarnings = FALSE)
 
 BOX    <- list(lon = c(-98, -80), lat = c(18, 31))   # study area
 FATHOM <- 1.8288                                     # DEPTH_SSTA is recorded in fathoms
