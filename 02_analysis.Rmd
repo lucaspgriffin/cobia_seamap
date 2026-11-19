@@ -27,7 +27,7 @@ MAP_LAT <- c(23.5, 31)                                # map extent, trimmed nort
 SHELF_M <- 200                                        # shelf cut-off, metres
 PEAK    <- c(6, 7)                                    # spawning-season months
 SERIES  <- 1982:2016                                  # June-July sampling ends with the 2016 survey
-SORTED  <- c("1", "2", "4", "D")
+SORTED  <- c("1", "2", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N")   # valid sorted status, SEAMAP Section IV
 DWH     <- tibble(lon = -88.3660, lat = 28.7366)      # Deepwater Horizon wellhead
 
 SIZE_LEVELS <- c("Small (<5 mm)", "Medium (5-15 mm)", "Large (>15 mm)")

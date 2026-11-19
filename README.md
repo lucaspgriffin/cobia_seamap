@@ -50,7 +50,8 @@ it from the original layer if that file is removed.
 
 - `DEPTH_SSTA` is fathoms. `TEMP_SSURF` is zero when no reading was taken.
 - `ISARWK` counts are of the sorted fraction; the aliquot is divided out.
-- Effort is sorted bongo and neuston deployments of the standard gears, one per station and gear.
+- Effort is the standard SEAMAP bongo and neuston tows defined in Section IV of the SEAMAP database
+  documentation (gear, mesh, tow pattern and sorted status), one per station and gear.
 - Station times are converted to GMT before day and night are assigned.
 - Surface salinity, oxygen and turbidity are `sal_surf`, `oxy_surf` and `turb_surf` on
   `effort.csv` and `cobia_records.csv`; values outside the physical range are set to NA.

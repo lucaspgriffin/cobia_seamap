@@ -138,9 +138,11 @@ count(envrec, env_source, name = "stations")
 
 # Effort
 
-Effort is sorted deployments of the standard gears: the 61- or 60-cm bongo with 0.333-mm mesh (gear
-01 or 17, mesh 03) and the single or double neuston net with 0.947-mm mesh (gear 03 or 08, mesh 09).
-Larvae from other gears and meshes stay on the distribution map but are left out of every rate.
+Effort is the standard SEAMAP tows defined in Section IV of the SEAMAP database documentation: the
+61- or 60-cm bongo with 0.333-mm mesh (gear 01 or 17, mesh 03) towed obliquely (tow pattern 01), and
+the single or double neuston net with 0.947-mm mesh (gear 03 or 08, mesh 09) towed at the surface
+(tow pattern 02), with a sorted status of 1, 2 or D to N. Larvae from other gears, meshes and tows
+stay on the distribution map but are left out of every rate.
 
 ```{r effort}
 GEAR <- c("01" = "Bongo", "17" = "Bongo", "11" = "Bongo", "14" = "Bongo", "05" = "Bongo",
@@ -148,14 +150,17 @@ GEAR <- c("01" = "Bongo", "17" = "Bongo", "11" = "Bongo", "14" = "Bongo", "05" =
           "03" = "Neuston", "08" = "Neuston",
           "07" = "Tucker trawl", "09" = "MOCNESS", "02" = "Ring", "04" = "Ring",
           "16" = "Methot", "06" = "Other")
-SORTED <- c("1", "2", "4", "D")
+# Sort status codes for valid quantitative samples (SEAMAP documentation, Section IV):
+# 1 and 2 are sorted with and without fish; D to N are the same under other labs and protocols
+SORTED <- c("1", "2", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N")
 
 istrwk <- read_seamap("ISTRWK.csv") %>%
   transmute(v_c_p = V_C_P, v_c_p_s = V_C_P_S,   # V_C_P is 9 characters on a few stations
             gear = GEAR[GEAR_ICD], sort_ist = SORT_IST, vol_filt_m3 = as.numeric(VOL_FILT),
             its_code = ITS_CODE,
-            standard = (GEAR_ICD %in% c("01", "17") & MESH_ICD == "03") |
-                       (GEAR_ICD %in% c("03", "08") & MESH_ICD == "09")) %>%
+            # Standard tows: bongo with 0.333-mm mesh towed obliquely, neuston with 0.947-mm mesh at the surface
+            standard = (GEAR_ICD %in% c("01", "17") & MESH_ICD == "03" & TOW_PATTERN %in% "01") |
+                       (GEAR_ICD %in% c("03", "08") & MESH_ICD == "09" & TOW_PATTERN %in% "02")) %>%
   mutate(gear = if_else(gear %in% c("Bongo", "Neuston") & !standard,
                         paste(gear, "(non-standard)"), gear)) %>%
   select(-standard)

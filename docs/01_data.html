@@ -1784,24 +1784,29 @@ starec %&gt;%
 </div>
 <div id="effort" class="section level1">
 <h1>Effort</h1>
-<p>Effort is sorted deployments of the standard gears: the 61- or 60-cm
-bongo with 0.333-mm mesh (gear 01 or 17, mesh 03) and the single or
-double neuston net with 0.947-mm mesh (gear 03 or 08, mesh 09). Larvae
-from other gears and meshes stay on the distribution map but are left
-out of every rate.</p>
+<p>Effort is the standard SEAMAP tows defined in Section IV of the
+SEAMAP database documentation: the 61- or 60-cm bongo with 0.333-mm mesh
+(gear 01 or 17, mesh 03) towed obliquely (tow pattern 01), and the
+single or double neuston net with 0.947-mm mesh (gear 03 or 08, mesh 09)
+towed at the surface (tow pattern 02), with a sorted status of 1, 2 or D
+to N. Larvae from other gears, meshes and tows stay on the distribution
+map but are left out of every rate.</p>
 <pre class="r"><code>GEAR &lt;- c(&quot;01&quot; = &quot;Bongo&quot;, &quot;17&quot; = &quot;Bongo&quot;, &quot;11&quot; = &quot;Bongo&quot;, &quot;14&quot; = &quot;Bongo&quot;, &quot;05&quot; = &quot;Bongo&quot;,
           &quot;12&quot; = &quot;Bongo&quot;, &quot;13&quot; = &quot;Bongo&quot;, &quot;15&quot; = &quot;Bongo&quot;,
           &quot;03&quot; = &quot;Neuston&quot;, &quot;08&quot; = &quot;Neuston&quot;,
           &quot;07&quot; = &quot;Tucker trawl&quot;, &quot;09&quot; = &quot;MOCNESS&quot;, &quot;02&quot; = &quot;Ring&quot;, &quot;04&quot; = &quot;Ring&quot;,
           &quot;16&quot; = &quot;Methot&quot;, &quot;06&quot; = &quot;Other&quot;)
-SORTED &lt;- c(&quot;1&quot;, &quot;2&quot;, &quot;4&quot;, &quot;D&quot;)
+# Sort status codes for valid quantitative samples (SEAMAP documentation, Section IV):
+# 1 and 2 are sorted with and without fish; D to N are the same under other labs and protocols
+SORTED &lt;- c(&quot;1&quot;, &quot;2&quot;, &quot;D&quot;, &quot;E&quot;, &quot;F&quot;, &quot;G&quot;, &quot;H&quot;, &quot;I&quot;, &quot;J&quot;, &quot;K&quot;, &quot;L&quot;, &quot;M&quot;, &quot;N&quot;)
 
 istrwk &lt;- read_seamap(&quot;ISTRWK.csv&quot;) %&gt;%
   transmute(v_c_p = V_C_P, v_c_p_s = V_C_P_S,   # V_C_P is 9 characters on a few stations
             gear = GEAR[GEAR_ICD], sort_ist = SORT_IST, vol_filt_m3 = as.numeric(VOL_FILT),
             its_code = ITS_CODE,
-            standard = (GEAR_ICD %in% c(&quot;01&quot;, &quot;17&quot;) &amp; MESH_ICD == &quot;03&quot;) |
-                       (GEAR_ICD %in% c(&quot;03&quot;, &quot;08&quot;) &amp; MESH_ICD == &quot;09&quot;)) %&gt;%
+            # Standard tows: bongo with 0.333-mm mesh towed obliquely, neuston with 0.947-mm mesh at the surface
+            standard = (GEAR_ICD %in% c(&quot;01&quot;, &quot;17&quot;) &amp; MESH_ICD == &quot;03&quot; &amp; TOW_PATTERN %in% &quot;01&quot;) |
+                       (GEAR_ICD %in% c(&quot;03&quot;, &quot;08&quot;) &amp; MESH_ICD == &quot;09&quot; &amp; TOW_PATTERN %in% &quot;02&quot;)) %&gt;%
   mutate(gear = if_else(gear %in% c(&quot;Bongo&quot;, &quot;Neuston&quot;) &amp; !standard,
                         paste(gear, &quot;(non-standard)&quot;), gear)) %&gt;%
   select(-standard)
@@ -1817,11 +1822,11 @@ count(istrwk, gear, name = &quot;samples&quot;)</code></pre>
 <tbody>
 <tr class="odd">
 <td align="left">Bongo</td>
-<td align="right">29011</td>
+<td align="right">28860</td>
 </tr>
 <tr class="even">
 <td align="left">Bongo (non-standard)</td>
-<td align="right">1997</td>
+<td align="right">2148</td>
 </tr>
 <tr class="odd">
 <td align="left">MOCNESS</td>
@@ -1833,11 +1838,11 @@ count(istrwk, gear, name = &quot;samples&quot;)</code></pre>
 </tr>
 <tr class="odd">
 <td align="left">Neuston</td>
-<td align="right">19221</td>
+<td align="right">19217</td>
 </tr>
 <tr class="even">
 <td align="left">Neuston (non-standard)</td>
-<td align="right">1133</td>
+<td align="right">1137</td>
 </tr>
 <tr class="odd">
 <td align="left">Ring</td>
@@ -1885,11 +1890,11 @@ count(effort, gear, name = &quot;deployments&quot;)</code></pre>
 <tbody>
 <tr class="odd">
 <td align="left">Bongo</td>
-<td align="right">13931</td>
+<td align="right">13991</td>
 </tr>
 <tr class="even">
 <td align="left">Neuston</td>
-<td align="right">15196</td>
+<td align="right">15272</td>
 </tr>
 </tbody>
 </table>
@@ -1916,7 +1921,7 @@ the summer trawl survey in 2016.</p>
 </tr>
 <tr class="even">
 <td align="right">2</td>
-<td align="right">464</td>
+<td align="right">477</td>
 <td align="right">0</td>
 </tr>
 <tr class="odd">
@@ -1926,7 +1931,7 @@ the summer trawl survey in 2016.</p>
 </tr>
 <tr class="even">
 <td align="right">4</td>
-<td align="right">283</td>
+<td align="right">297</td>
 <td align="right">42</td>
 </tr>
 <tr class="odd">
@@ -1936,7 +1941,7 @@ the summer trawl survey in 2016.</p>
 </tr>
 <tr class="even">
 <td align="right">6</td>
-<td align="right">2177</td>
+<td align="right">2191</td>
 <td align="right">0</td>
 </tr>
 <tr class="odd">
@@ -1951,17 +1956,17 @@ the summer trawl survey in 2016.</p>
 </tr>
 <tr class="odd">
 <td align="right">9</td>
-<td align="right">5951</td>
+<td align="right">5950</td>
 <td align="right">1142</td>
 </tr>
 <tr class="even">
 <td align="right">10</td>
-<td align="right">2180</td>
+<td align="right">2201</td>
 <td align="right">5</td>
 </tr>
 <tr class="odd">
 <td align="right">11</td>
-<td align="right">1505</td>
+<td align="right">1583</td>
 <td align="right">0</td>
 </tr>
 <tr class="even">
