@@ -1607,7 +1607,10 @@ starec &lt;- read_seamap(&quot;STAREC.csv&quot;) %&gt;%
          time_utc = if_else(hh &lt;= 23 &amp; mm &lt;= 59,
                             as.POSIXct(date, tz = &quot;UTC&quot;) + (hh + mm / 60 - TZ_OFFSET[time_zn]) * 3600,
                             as.POSIXct(NA, tz = &quot;UTC&quot;)),
-         night = getSunlightPosition(data = data.frame(date = time_utc, lat = lat, lon = lon))$altitude &lt; 0) %&gt;%
+         # Sun&#39;s angle above the horizon (radians) at each station&#39;s GMT time and position
+         sun_altitude = getSunlightPosition(data = data.frame(date = time_utc, lat = lat, lon = lon))$altitude,
+         # Night when the sun was below the horizon
+         night = sun_altitude &lt; 0) %&gt;%
   select(-hh, -mm)
 
 sprintf(&quot;%d stations; surface temperature on %d (%.1f%%)&quot;,

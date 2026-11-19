@@ -90,7 +90,10 @@ starec <- read_seamap("STAREC.csv") %>%
          time_utc = if_else(hh <= 23 & mm <= 59,
                             as.POSIXct(date, tz = "UTC") + (hh + mm / 60 - TZ_OFFSET[time_zn]) * 3600,
                             as.POSIXct(NA, tz = "UTC")),
-         night = getSunlightPosition(data = data.frame(date = time_utc, lat = lat, lon = lon))$altitude < 0) %>%
+         # Sun's angle above the horizon (radians) at each station's GMT time and position
+         sun_altitude = getSunlightPosition(data = data.frame(date = time_utc, lat = lat, lon = lon))$altitude,
+         # Night when the sun was below the horizon
+         night = sun_altitude < 0) %>%
   select(-hh, -mm)
 
 sprintf("%d stations; surface temperature on %d (%.1f%%)",
